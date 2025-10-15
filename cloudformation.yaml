@@ -1,0 +1,153 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 instance for Streamlit Lounge Access Advisor App with UV'
+
+Parameters:
+  KeyName:
+    Description: EC2 Key Pair for SSH access
+    Type: String
+    Default: ''
+  
+  InstanceType:
+    Description: EC2 instance type
+    Type: String
+    Default: t2.micro
+    AllowedValues:
+      - t2.micro
+      - t2.small
+      - t2.medium
+
+Resources:
+  # Security Group
+  StreamlitSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Streamlit app
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          CidrIp: 0.0.0.0/0
+          Description: Streamlit app
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP
+      Tags:
+        - Key: Name
+          Value: StreamlitSecurityGroup
+
+  # IAM Role for EC2
+  StreamlitEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Tags:
+        - Key: Name
+          Value: StreamlitEC2Role
+
+  # Instance Profile
+  StreamlitInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref StreamlitEC2Role
+
+  # EC2 Instance
+  StreamlitEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      InstanceType: !Ref InstanceType
+      IamInstanceProfile: !Ref StreamlitInstanceProfile
+      SecurityGroupIds:
+        - !Ref StreamlitSecurityGroup
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          # Update system
+          yum update -y
+          
+          # Install Python 3.11 and git
+          yum install -y python3.11 python3.11-pip git curl
+          
+          # Install uv (modern Python package manager)
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          export PATH="/root/.cargo/bin:$PATH"
+          
+          # Create app directory
+          mkdir -p /home/ec2-user/app
+          cd /home/ec2-user/app
+          
+          # Clone repository (will be updated by CI/CD)
+          git clone https://github.com/AnuR-lab/-LoungeAccessAdvisor.git .
+          
+          # Install dependencies using uv
+          /root/.cargo/bin/uv pip install -r pyproject.toml --system
+          
+          # Create systemd service
+          cat > /etc/systemd/system/streamlit.service <<EOF
+          [Unit]
+          Description=Streamlit App
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user/app
+          Environment="PATH=/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin"
+          ExecStart=/usr/local/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+          Restart=always
+          RestartSec=10
+          
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          
+          # Set permissions
+          chown -R ec2-user:ec2-user /home/ec2-user/app
+          
+          # Enable and start service
+          systemctl daemon-reload
+          systemctl enable streamlit
+          systemctl start streamlit
+          
+      Tags:
+        - Key: Name
+          Value: StreamlitApp
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+
+Outputs:
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref StreamlitEC2Instance
+    
+  PublicIP:
+    Description: Public IP address
+    Value: !GetAtt StreamlitEC2Instance.PublicIp
+    
+  StreamlitURL:
+    Description: Streamlit application URL
+    Value: !Sub 'http://${StreamlitEC2Instance.PublicIp}:8501'
+    
+  SSHCommand:
+    Description: SSH command to connect
+    Value: !Sub 'ssh -i your-key.pem ec2-user@${StreamlitEC2Instance.PublicIp}'
