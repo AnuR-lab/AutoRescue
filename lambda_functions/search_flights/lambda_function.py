@@ -207,16 +207,14 @@ def search_flights(
 
 def lambda_handler(event, context):
     """
-    AWS Lambda handler
-    Expected event format from AgentCore Gateway:
-    {
-        "origin": "JFK",
-        "destination": "LAX",
-        "departure_date": "2025-12-15",
-        "adults": 1,
-        "max_results": 5
-    }
+    Lambda handler for flight search requests
     """
+    # Enhanced logging
+    print(f"[SEARCH_FLIGHTS] ===== NEW REQUEST =====")
+    print(f"[SEARCH_FLIGHTS] Request ID: {context.request_id}")
+    print(f"[SEARCH_FLIGHTS] Function ARN: {context.invoked_function_arn}")
+    print(f"[SEARCH_FLIGHTS] Received event: {json.dumps(event)}")
+    
     try:
         # Parse input parameters
         if isinstance(event.get('body'), str):
@@ -224,46 +222,61 @@ def lambda_handler(event, context):
         else:
             body = event.get('body', event)
         
+        print(f"[SEARCH_FLIGHTS] Parsed body: {json.dumps(body)}")
+        
         # Extract parameters
         origin = body.get('origin')
         destination = body.get('destination')
-        departure_date = body.get('departure_date')
+        departure_date = body.get('departure_date') or body.get('departureDate')
         adults = body.get('adults', 1)
         max_results = body.get('max_results', 5)
         
+        print(f"[SEARCH_FLIGHTS] Parameters - Origin: {origin}, Destination: {destination}, Date: {departure_date}, Adults: {adults}")
+        
         # Validate required parameters
         if not all([origin, destination, departure_date]):
+            error_msg = f"Missing required parameters - origin: {origin}, destination: {destination}, date: {departure_date}"
+            print(f"[SEARCH_FLIGHTS] ERROR: {error_msg}")
             return {
-                "statusCode": 400,
-                "body": json.dumps({
-                    "success": False,
-                    "error": "Missing required parameters: origin, destination, departure_date"
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({
+                    'success': False,
+                    'error': 'Missing required parameters: origin, destination, departure_date'
                 })
             }
         
-        # Call search function
+        print(f"[SEARCH_FLIGHTS] Calling search_flights()...")
+        # Search for flights
         result = search_flights(
             origin=origin,
             destination=destination,
             departure_date=departure_date,
-            adults=adults,
-            max_results=max_results
+            adults=int(adults),
+            max_results=int(max_results)
         )
         
-        # Return response
-        return {
-            "statusCode": 200 if result.get("success") else 500,
-            "headers": {
-                "Content-Type": "application/json"
-            },
-            "body": json.dumps(result)
+        print(f"[SEARCH_FLIGHTS] Search completed. Success: {result.get('success')}, Flight count: {result.get('flight_count', 0)}")
+        
+        # Return success response
+        response = {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json'},
+            'body': json.dumps(result)
         }
+        print(f"[SEARCH_FLIGHTS] Returning success response")
+        return response
         
     except Exception as e:
+        error_msg = f"Lambda error: {str(e)}"
+        print(f"[SEARCH_FLIGHTS] ERROR: {error_msg}")
+        import traceback
+        print(f"[SEARCH_FLIGHTS] Traceback: {traceback.format_exc()}")
         return {
             "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
                 "success": False,
-                "error": f"Lambda error: {str(e)}"
+                "error": error_msg
             })
         }

@@ -276,6 +276,12 @@ def lambda_handler(event, context):
         "disruption_reason": "cancellation"
     }
     """
+    # Enhanced logging
+    print(f"[ANALYZE_DISRUPTION] ===== NEW REQUEST =====")
+    print(f"[ANALYZE_DISRUPTION] Request ID: {context.request_id}")
+    print(f"[ANALYZE_DISRUPTION] Function ARN: {context.invoked_function_arn}")
+    print(f"[ANALYZE_DISRUPTION] Received event: {json.dumps(event)}")
+    
     try:
         # Parse input parameters
         if isinstance(event.get('body'), str):
@@ -283,23 +289,31 @@ def lambda_handler(event, context):
         else:
             body = event.get('body', event)
         
+        print(f"[ANALYZE_DISRUPTION] Parsed body: {json.dumps(body)}")
+        
         # Extract parameters
-        original_flight = body.get('original_flight')
+        original_flight = body.get('original_flight') or body.get('flightNumber')
         origin = body.get('origin')
         destination = body.get('destination')
-        original_date = body.get('original_date')
+        original_date = body.get('original_date') or body.get('date')
+        
+        print(f"[ANALYZE_DISRUPTION] Parameters - Flight: {original_flight}, Origin: {origin}, Destination: {destination}, Date: {original_date}")
         disruption_reason = body.get('disruption_reason', 'cancellation')
         
         # Validate required parameters
         if not all([original_flight, origin, destination, original_date]):
+            error_msg = f"Missing required parameters - flight: {original_flight}, origin: {origin}, destination: {destination}, date: {original_date}"
+            print(f"[ANALYZE_DISRUPTION] ERROR: {error_msg}")
             return {
                 "statusCode": 400,
+                "headers": {"Content-Type": "application/json"},
                 "body": json.dumps({
                     "success": False,
                     "error": "Missing required parameters: original_flight, origin, destination, original_date"
                 })
             }
         
+        print(f"[ANALYZE_DISRUPTION] Calling analyze_disruption()...")
         # Call analysis function
         result = analyze_disruption(
             original_flight=original_flight,
@@ -309,20 +323,29 @@ def lambda_handler(event, context):
             disruption_reason=disruption_reason
         )
         
+        print(f"[ANALYZE_DISRUPTION] Analysis completed. Success: {result.get('success')}")
+        
         # Return response
-        return {
+        response = {
             "statusCode": 200 if result.get("success") else 500,
             "headers": {
                 "Content-Type": "application/json"
             },
             "body": json.dumps(result)
         }
+        print(f"[ANALYZE_DISRUPTION] Returning response with status {response['statusCode']}")
+        return response
         
     except Exception as e:
+        error_msg = f"Lambda error: {str(e)}"
+        print(f"[ANALYZE_DISRUPTION] ERROR: {error_msg}")
+        import traceback
+        print(f"[ANALYZE_DISRUPTION] Traceback: {traceback.format_exc()}")
         return {
             "statusCode": 500,
+            "headers": {"Content-Type": "application/json"},
             "body": json.dumps({
                 "success": False,
-                "error": f"Lambda error: {str(e)}"
+                "error": error_msg
             })
         }
