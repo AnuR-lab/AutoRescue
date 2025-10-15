@@ -15,23 +15,6 @@ Parameters:
       - t2.micro
       - t2.small
       - t2.medium
-  
-  # WARNING: Credentials are now stored in AWS Secrets Manager
-  # These parameters are deprecated - Lambda functions fetch credentials at runtime
-  # To use this template, either:
-  # 1. Remove these parameters and environment variable references in Lambda code
-  # 2. Or provide placeholder values (not used)
-  AmadeusClientID:
-    Description: '[DEPRECATED] Amadeus API Client ID - Now in Secrets Manager'
-    Type: String
-    Default: 'PLACEHOLDER_NOT_USED'
-    NoEcho: true
-  
-  AmadeusClientSecret:
-    Description: '[DEPRECATED] Amadeus API Client Secret - Now in Secrets Manager'
-    Type: String
-    Default: 'PLACEHOLDER_NOT_USED'
-    NoEcho: true
 
 Resources:
   # ==========================================
@@ -63,6 +46,15 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/AutoRescue-SearchFlights:*'
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:autorescue/amadeus/credentials-*'
       Tags:
         - Key: Application
           Value: AutoRescue
@@ -94,6 +86,15 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/AutoRescue-AnalyzeDisruption:*'
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:autorescue/amadeus/credentials-*'
       Tags:
         - Key: Application
           Value: AutoRescue
@@ -110,23 +111,48 @@ Resources:
       Role: !GetAtt SearchFlightsLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
-      Environment:
-        Variables:
-          AMADEUS_CLIENT_ID: !Ref AmadeusClientID
-          AMADEUS_CLIENT_SECRET: !Ref AmadeusClientSecret
       Code:
         ZipFile: |
           import json
           import os
+          import boto3
           import urllib3
           from datetime import datetime, timedelta
           
           # Disable SSL warnings for development
           urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
           
-          # Amadeus API credentials
-          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
-          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
+          # Secrets cache
+          _secrets_cache = {
+              'amadeus_credentials': None,
+              'fetched_at': None
+          }
+          
+          def get_amadeus_credentials():
+              """Fetch Amadeus credentials from AWS Secrets Manager with caching"""
+              # Return cached credentials if recently fetched (within 1 hour)
+              if _secrets_cache['amadeus_credentials'] and _secrets_cache['fetched_at']:
+                  elapsed = datetime.now() - _secrets_cache['fetched_at']
+                  if elapsed.total_seconds() < 3600:
+                      return _secrets_cache['amadeus_credentials']
+              
+              # Fetch from Secrets Manager
+              secret_name = "autorescue/amadeus/credentials"
+              region_name = os.getenv('AWS_REGION', 'us-east-1')
+              
+              client = boto3.client('secretsmanager', region_name=region_name)
+              
+              try:
+                  response = client.get_secret_value(SecretId=secret_name)
+                  secret = json.loads(response['SecretString'])
+                  
+                  # Cache the credentials
+                  _secrets_cache['amadeus_credentials'] = secret
+                  _secrets_cache['fetched_at'] = datetime.now()
+                  
+                  return secret
+              except Exception as e:
+                  raise RuntimeError(f"Failed to fetch Amadeus credentials from Secrets Manager: {str(e)}")
           
           # API endpoints
           TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
@@ -134,13 +160,16 @@ Resources:
           
           def get_access_token():
               """Get OAuth2 access token from Amadeus"""
+              # Get credentials from Secrets Manager
+              credentials = get_amadeus_credentials()
+              
               http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
               
               headers = {
                   'Content-Type': 'application/x-www-form-urlencoded'
               }
               
-              body = f"grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}"
+              body = f"grant_type=client_credentials&client_id={credentials['client_id']}&client_secret={credentials['client_secret']}"
               
               try:
                   response = http.request(
@@ -241,23 +270,48 @@ Resources:
       Role: !GetAtt AnalyzeDisruptionLambdaRole.Arn
       Timeout: 30
       MemorySize: 256
-      Environment:
-        Variables:
-          AMADEUS_CLIENT_ID: !Ref AmadeusClientID
-          AMADEUS_CLIENT_SECRET: !Ref AmadeusClientSecret
       Code:
         ZipFile: |
           import json
           import os
+          import boto3
           import urllib3
           from datetime import datetime, timedelta
           
           # Disable SSL warnings for development
           urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
           
-          # Amadeus API credentials
-          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
-          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
+          # Secrets cache
+          _secrets_cache = {
+              'amadeus_credentials': None,
+              'fetched_at': None
+          }
+          
+          def get_amadeus_credentials():
+              """Fetch Amadeus credentials from AWS Secrets Manager with caching"""
+              # Return cached credentials if recently fetched (within 1 hour)
+              if _secrets_cache['amadeus_credentials'] and _secrets_cache['fetched_at']:
+                  elapsed = datetime.now() - _secrets_cache['fetched_at']
+                  if elapsed.total_seconds() < 3600:
+                      return _secrets_cache['amadeus_credentials']
+              
+              # Fetch from Secrets Manager
+              secret_name = "autorescue/amadeus/credentials"
+              region_name = os.getenv('AWS_REGION', 'us-east-1')
+              
+              client = boto3.client('secretsmanager', region_name=region_name)
+              
+              try:
+                  response = client.get_secret_value(SecretId=secret_name)
+                  secret = json.loads(response['SecretString'])
+                  
+                  # Cache the credentials
+                  _secrets_cache['amadeus_credentials'] = secret
+                  _secrets_cache['fetched_at'] = datetime.now()
+                  
+                  return secret
+              except Exception as e:
+                  raise RuntimeError(f"Failed to fetch Amadeus credentials from Secrets Manager: {str(e)}")
           
           # API endpoints
           TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
@@ -265,13 +319,16 @@ Resources:
           
           def get_access_token():
               """Get OAuth2 access token from Amadeus"""
+              # Get credentials from Secrets Manager
+              credentials = get_amadeus_credentials()
+              
               http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
               
               headers = {
                   'Content-Type': 'application/x-www-form-urlencoded'
               }
               
-              body = f"grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}"
+              body = f"grant_type=client_credentials&client_id={credentials['client_id']}&client_secret={credentials['client_secret']}"
               
               try:
                   response = http.request(
