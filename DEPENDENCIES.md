@@ -38,7 +38,7 @@ pip install -e .
 |---------|---------|---------|
 | `agentcore` | `>=0.1.0` | AWS Bedrock AgentCore framework (flexible - in development) |
 | `boto3` | `==1.40.52` | AWS SDK for Python |
-| `botocore` | `==1.35.52` | Low-level AWS client library |
+| `botocore` | `==1.40.52` | Low-level AWS client library |
 | `requests` | `==2.32.5` | HTTP library for API calls |
 | `python-dotenv` | `==1.1.1` | Environment variable management |
 | `streamlit` | `==1.50.0` | Web UI framework |
