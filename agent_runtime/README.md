@@ -85,7 +85,12 @@ aws configure
 
 ### Local Testing
 
+**⚠️ Note**: Local testing requires AWS credentials configured in `~/.aws/credentials`. If using temporary credentials (e.g., from `assume`), the agent will initialize successfully but model invocations may fail with "Unable to locate credentials". This is expected behavior for local testing only.
+
 ```bash
+# Activate virtual environment
+source venv/bin/activate
+
 # Test the agent locally
 python scripts/test_agent_local.py
 ```
@@ -95,7 +100,12 @@ python scripts/test_agent_local.py
 ✅ Agent initialized successfully
    Tools loaded: 3
    Tool names: [current_time, search-flights, analyze-disruption]
+   
+✅ Connected to gateway
+✅ OAuth2 token obtained
 ```
+
+**When deployed to AgentCore Runtime**, the IAM execution role will handle credentials automatically - no credential issues will occur in production.
 
 ### Deployment to AWS
 
