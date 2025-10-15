@@ -7,6 +7,7 @@ import os
 import logging
 from typing import List, Optional
 from datetime import datetime
+import requests
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
 from strands.models import BedrockModel
@@ -28,7 +29,13 @@ GATEWAY_URL = os.getenv(
     "GATEWAY_URL",
     "https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
 )
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
+# Cognito OAuth2 Configuration
+COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "5ptprke4sq904kc6kv067d4mjo")
+COGNITO_CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET", "1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r")
+COGNITO_DOMAIN = os.getenv("COGNITO_DOMAIN", "autorescue-1760552868.auth.us-east-1.amazoncognito.com")
+
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # Allow override via env var
 
 # Model Configuration
 MODEL_ID = os.getenv(
@@ -41,6 +48,42 @@ MODEL_ID = os.getenv(
 def current_time() -> str:
     """Get the current date and time in ISO format."""
     return datetime.now().isoformat()
+
+
+def fetch_oauth_token() -> str:
+    """
+    Fetch OAuth2 access token from Cognito using client credentials
+    
+    Returns:
+        str: Access token
+        
+    Raises:
+        Exception: If token fetch fails
+    """
+    token_url = f"https://{COGNITO_DOMAIN}/oauth2/token"
+    
+    try:
+        logger.info("Fetching OAuth2 token from Cognito...")
+        response = requests.post(
+            token_url,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data=f"grant_type=client_credentials&client_id={COGNITO_CLIENT_ID}&client_secret={COGNITO_CLIENT_SECRET}",
+            timeout=10
+        )
+        response.raise_for_status()
+        
+        token_data = response.json()
+        access_token = token_data.get("access_token")
+        
+        if not access_token:
+            raise ValueError("No access_token in response")
+        
+        logger.info(f"OAuth2 token obtained (expires in {token_data.get('expires_in', 'unknown')} seconds)")
+        return access_token
+        
+    except Exception as e:
+        logger.error(f"Failed to fetch OAuth2 token: {e}")
+        raise
 
 
 # System Prompt
@@ -218,7 +261,7 @@ def invoke(payload: dict, context=None):
     Args:
         payload: Request payload containing:
             - prompt: User's message/question
-            - bearer_token: OAuth2 token for gateway authentication
+            - bearer_token: (Optional) OAuth2 token for gateway authentication
         context: Runtime context information
         
     Returns:
@@ -230,10 +273,15 @@ def invoke(payload: dict, context=None):
         if not user_message:
             return {"error": "Missing 'prompt' field in payload"}
         
-        # Extract bearer token
+        # Get bearer token - try payload first, then env var, then fetch dynamically
         bearer_token = payload.get("bearer_token") or ACCESS_TOKEN
+        
         if not bearer_token:
-            return {"error": "Missing bearer token. Provide via 'bearer_token' field or ACCESS_TOKEN environment variable"}
+            logger.info("No bearer token provided, fetching from Cognito...")
+            try:
+                bearer_token = fetch_oauth_token()
+            except Exception as e:
+                return {"error": f"Failed to obtain OAuth2 token: {str(e)}"}
         
         logger.info(f"Request received: {user_message[:100]}...")
         

@@ -1,0 +1,41 @@
+default_agent: autorescue_agent
+agents:
+  autorescue_agent:
+    name: autorescue_agent
+    entrypoint: /Users/abhinaikumarchitrala/Documents/hackathon/AutoRescue/agent_runtime/autorescue_agent.py
+    platform: linux/arm64
+    container_runtime: none
+    source_path: /Users/abhinaikumarchitrala/Documents/hackathon/AutoRescue/agent_runtime
+    aws:
+      execution_role: arn:aws:iam::905418267822:role/AmazonBedrockAgentCoreSDKRuntime-us-east-1-c76824e496
+      execution_role_auto_create: false
+      account: '905418267822'
+      region: us-east-1
+      ecr_repository: 905418267822.dkr.ecr.us-east-1.amazonaws.com/bedrock-agentcore-autorescue_agent
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+        network_mode_config: null
+      protocol_configuration:
+        server_protocol: HTTP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: autorescue_agent-KyZlYU4Lgs
+      agent_arn: arn:aws:bedrock-agentcore:us-east-1:905418267822:runtime/autorescue_agent-KyZlYU4Lgs
+      agent_session_id: 52c39701-6822-4dd0-b36a-e32d03536d6a
+    codebuild:
+      project_name: bedrock-agentcore-autorescue_agent-builder
+      execution_role: arn:aws:iam::905418267822:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-c76824e496
+      source_bucket: bedrock-agentcore-codebuild-sources-905418267822-us-east-1
+    memory:
+      mode: STM_ONLY
+      memory_id: autorescue_agent_mem-4Juts3EkS9
+      memory_arn: arn:aws:bedrock-agentcore:us-east-1:905418267822:memory/autorescue_agent_mem-4Juts3EkS9
+      memory_name: autorescue_agent_mem
+      event_expiry_days: 30
+      first_invoke_memory_check_done: true
+      was_created_by_toolkit: true
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
