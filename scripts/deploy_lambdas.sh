@@ -96,7 +96,7 @@ deploy_lambda() {
     # Install dependencies
     if [ -f requirements.txt ]; then
         echo "  Installing dependencies..."
-        pip install -r requirements.txt -t package/ --quiet
+        pip3 install -r requirements.txt -t package/ --quiet --upgrade
     fi
     
     # Copy Lambda function
@@ -108,6 +108,9 @@ deploy_lambda() {
     cd ..
     
     echo "  Package size: $(du -h deployment.zip | cut -f1)"
+    
+    # Set environment variables for Lambda (use credentials from hardcoded values)
+    ENV_VARS="Variables={AMADEUS_CLIENT_ID=EAiOKtslVsY8vTxyT17QoXqdvyl9s67z,AMADEUS_CLIENT_SECRET=leeAu7flsoGFTmYp}"
     
     # Check if function exists
     if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGION" 2>/dev/null; then
@@ -122,7 +125,7 @@ deploy_lambda() {
             --function-name "$FUNCTION_NAME" \
             --timeout 30 \
             --memory-size 256 \
-            --environment "Variables={AMADEUS_CLIENT_ID=\${AMADEUS_CLIENT_ID},AMADEUS_CLIENT_SECRET=\${AMADEUS_CLIENT_SECRET}}" \
+            --environment "$ENV_VARS" \
             --region "$AWS_REGION" > /dev/null
         
         echo -e "  ${GREEN}✓ Updated function: $FUNCTION_NAME${NC}"
@@ -137,7 +140,7 @@ deploy_lambda() {
             --description "$DESCRIPTION" \
             --timeout 30 \
             --memory-size 256 \
-            --environment "Variables={AMADEUS_CLIENT_ID=\${AMADEUS_CLIENT_ID},AMADEUS_CLIENT_SECRET=\${AMADEUS_CLIENT_SECRET}}" \
+            --environment "$ENV_VARS" \
             --region "$AWS_REGION" > /dev/null
         
         echo -e "  ${GREEN}✓ Created function: $FUNCTION_NAME${NC}"

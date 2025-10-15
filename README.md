@@ -2,67 +2,121 @@
 
 > AI-powered Flight Booking and Cancellation Assistant using AWS Bedrock AgentCore
 
-![Architecture](images/architecture.png)
-
-AutoRescue is an intelligent flight management assistant that helps travelers handle flight cancellations, rebookings, and travel disruptions with ease. Built on AWS Bedrock AgentCore with **Lambda-backed MCP tools** for seamless Amadeus API integration.
+AutoRescue is an intelligent flight management assistant that helps travelers handle flight cancellations, rebookings, and travel disruptions with ease. Built on AWS Bedrock AgentCore with Lambda-backed tools for seamless Amadeus API integration.
 
 ## 🌟 Features
 
-- **Real-time Flight Search**: Search flights for specific dates and routes
-- **Smart Disruption Analysis**: Automated alternative flight recommendations during cancellations
-- **Real-time Pricing**: Live flight prices and availability from Amadeus API
-- **Conversational AI**: Natural language interface powered by Claude 3.5 Sonnet
-- **Secure Authentication**: Cognito-based user authentication with OAuth 2.0
-- **Memory-Enabled**: Contextual conversations with session tracking
-- **Scalable Architecture**: Independent Lambda functions for each tool
+- **Real-time Flight Search** - Search flights for specific dates and routes
+- **Smart Disruption Analysis** - Automated alternative flight recommendations
+- **Real-time Pricing** - Live flight prices from Amadeus API
+- **Secure Authentication** - OAuth 2.0 via Amazon Cognito
+- **Scalable Architecture** - Independent Lambda functions for each tool
 
 ## 🏗️ Architecture
 
 ```
 Customer → AgentCore Runtime → AgentCore Gateway → AWS Lambda → Amadeus API
-              (Agent)              (OAuth 2.0)      (Tools)
+              (Claude)             (OAuth 2.0)      (2 Tools)
 ```
 
-### Components
+**Components:**
+- **AgentCore Gateway** - Routes tool calls with authentication
+- **Lambda Functions** - `SearchFlights` + `AnalyzeDisruption`
+- **Amazon Cognito** - OAuth 2.0 authentication
+- **Amadeus Flight API** - Real-time flight data
 
-- **AWS Bedrock AgentCore**: Runtime environment for the AI agent
-- **AgentCore Gateway**: Routes tool calls to Lambda functions with OAuth 2.0
-- **AWS Lambda Functions**: Independent, scalable tool implementations
-  - `AutoRescue-SearchFlights`: Flight search functionality
-  - `AutoRescue-AnalyzeDisruption`: Disruption analysis and rebooking
-- **Amazon Cognito**: User authentication and authorization
-- **Amadeus Flight API**: Real-time flight data provider (test environment)
-- **Claude 3.5 Sonnet v2**: Foundation model for intelligent responses
+## 🚀 Quick Start
+
+See **[DEPLOY.md](DEPLOY.md)** for complete deployment instructions.
+
+```bash
+# 1. Deploy Lambda functions
+./scripts/deploy_lambdas.sh
+
+# 2. Create AgentCore Gateway
+python scripts/create_agentcore_gateway.py
+
+# 3. Add Lambda targets via AWS Console
+# See DEPLOY.md Step 5 for details
+```
 
 ## 📋 Prerequisites
 
-### AWS Account Setup
+- AWS Account with administrator access
+- AWS CLI configured
+- Python 3.12+
+- Amadeus API credentials (included in Lambda code)
 
-1. **AWS Account**: Active AWS account with appropriate permissions
-   - [Create AWS Account](https://aws.amazon.com/account/)
-   - [AWS Console Access](https://aws.amazon.com/console/)
+## 📁 Project Structure
 
-2. **AWS CLI**: Install and configure AWS CLI
-   ```bash
-   aws configure
-   ```
+```
+AutoRescue/
+├── README.md                     # This file
+├── DEPLOY.md                     # Complete deployment guide
+├── DEPENDENCIES.md               # Dependency information
+├── main.py                       # Agent entry point
+├── requirements.txt              # Python dependencies
+│
+├── lambda_functions/             # Lambda function source
+│   ├── search_flights/
+│   │   ├── lambda_function.py
+│   │   └── requirements.txt
+│   └── analyze_disruption/
+│       ├── lambda_function.py
+│       └── requirements.txt
+│
+└── scripts/                      # Deployment automation
+    ├── create_agentcore_gateway.py
+    ├── deploy_lambdas.sh
+    └── test_lambdas.sh
+```
 
-3. **Bedrock Model Access**: Enable Claude 3.5 Sonnet in your AWS region
-   - Navigate to [Amazon Bedrock Console](https://console.aws.amazon.com/bedrock/)
-   - Go to "Model access" and request access to:
-     - `anthropic.claude-3-5-sonnet-20241022-v2:0`
+## 📚 Documentation
 
-4. **IAM Permissions**: Required for Lambda and AgentCore deployment
-   - Lambda execution role creation
-   - AgentCore gateway management
-   - Cognito user pool creation
+- **[DEPLOY.md](DEPLOY.md)** - Complete deployment guide
+- **[DEPENDENCIES.md](DEPENDENCIES.md)** - Dependency management
 
-5. **Python 3.12+**: Required for running the application
-   - [Python Downloads](https://www.python.org/downloads/)
+## 🛠️ Development
 
-6. **Amadeus API Credentials**: Sign up for Amadeus for Developers
-   - [Amadeus for Developers](https://developers.amadeus.com/)
-   - Get your Client ID and Client Secret (test environment)
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Test Lambda functions locally
+./scripts/test_lambdas.sh
+```
+
+## 🧪 Testing
+
+```bash
+# Test Lambda functions
+./scripts/test_lambdas.sh
+
+# Test OAuth2 token
+# See DEPLOY.md for detailed testing instructions
+```
+
+## 🔧 Troubleshooting
+
+See **[DEPLOY.md - Troubleshooting](DEPLOY.md#troubleshooting)** for common issues and solutions.
+
+## 📞 Support
+
+- [AWS Bedrock AgentCore Documentation](https://docs.aws.amazon.com/bedrock/agentcore/)
+- [AWS Lambda Documentation](https://docs.aws.amazon.com/lambda/)
+- [Amadeus API Documentation](https://developers.amadeus.com/)
+
+## 📄 License
+
+This project is for demonstration purposes.
+
+---
+
+**For complete deployment instructions, see [DEPLOY.md](DEPLOY.md)**
 
 ## 🚀 Deployment
 
