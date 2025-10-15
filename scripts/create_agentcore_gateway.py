@@ -254,12 +254,6 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
             "version": "1.0.0",
             "description": "Search for flight offers"
         },
-        "servers": [
-            {
-                "url": lambda_arn,
-                "description": "Search Flights Lambda"
-            }
-        ],
         "paths": {
             "/search-flights": {
                 "post": {
@@ -311,12 +305,13 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
         }
     }
     
-    # Create target configuration
+    # Create target configuration for Lambda
     target_config = {
         "mcp": {
             "openApiSchema": {
                 "inlinePayload": json.dumps(openapi_spec)
-            }
+            },
+            "lambdaArn": lambda_arn
         }
     }
     
@@ -346,12 +341,14 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
                     break
                 elif status == 'FAILED':
                     print(f"   ❌ Target failed!")
+                    failure_reason = status_response.get('failureReasons', ['Unknown'])
+                    print(f"   ❌ Failure reason: {failure_reason}")
                     break
                 else:
                     print(f"   ⏳ Status: {status} (attempt {i+1}/12)")
                     time.sleep(10)
-            except Exception:
-                print(f"   ⏳ Checking status... (attempt {i+1}/12)")
+            except Exception as check_error:
+                print(f"   ⏳ Checking status... (attempt {i+1}/12): {check_error}")
                 time.sleep(10)
         
         return target_id
@@ -374,12 +371,6 @@ def create_analyze_disruption_target(client, gateway_id, lambda_arn):
             "version": "1.0.0",
             "description": "Analyze flight disruptions"
         },
-        "servers": [
-            {
-                "url": lambda_arn,
-                "description": "Analyze Disruption Lambda"
-            }
-        ],
         "paths": {
             "/analyze-disruption": {
                 "post": {
@@ -430,12 +421,13 @@ def create_analyze_disruption_target(client, gateway_id, lambda_arn):
         }
     }
     
-    # Create target configuration
+    # Create target configuration for Lambda
     target_config = {
         "mcp": {
             "openApiSchema": {
                 "inlinePayload": json.dumps(openapi_spec)
-            }
+            },
+            "lambdaArn": lambda_arn
         }
     }
     
@@ -465,12 +457,14 @@ def create_analyze_disruption_target(client, gateway_id, lambda_arn):
                     break
                 elif status == 'FAILED':
                     print(f"   ❌ Target failed!")
+                    failure_reason = status_response.get('failureReasons', ['Unknown'])
+                    print(f"   ❌ Failure reason: {failure_reason}")
                     break
                 else:
                     print(f"   ⏳ Status: {status} (attempt {i+1}/12)")
                     time.sleep(10)
-            except Exception:
-                print(f"   ⏳ Checking status... (attempt {i+1}/12)")
+            except Exception as check_error:
+                print(f"   ⏳ Checking status... (attempt {i+1}/12): {check_error}")
                 time.sleep(10)
         
         return target_id

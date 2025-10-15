@@ -1,0 +1,30 @@
+{
+  "name": "analyzeDisruption",
+  "description": "Analyze a flight cancellation and provide rebooking recommendations",
+  "inputSchema": {
+    "type": "object",
+    "required": ["original_flight", "origin", "destination", "original_date"],
+    "properties": {
+      "original_flight": {
+        "type": "string",
+        "description": "Original flight number (e.g., AA123)"
+      },
+      "origin": {
+        "type": "string",
+        "description": "Three-letter IATA airport code for departure"
+      },
+      "destination": {
+        "type": "string",
+        "description": "Three-letter IATA airport code for arrival"
+      },
+      "original_date": {
+        "type": "string",
+        "description": "Original departure date in YYYY-MM-DD format"
+      },
+      "disruption_reason": {
+        "type": "string",
+        "description": "Reason for disruption (default: cancellation)"
+      }
+    }
+  }
+}

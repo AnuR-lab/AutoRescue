@@ -1,0 +1,30 @@
+{
+  "name": "searchFlights",
+  "description": "Search for flight offers for a specific route and date",
+  "inputSchema": {
+    "type": "object",
+    "required": ["origin", "destination", "departure_date"],
+    "properties": {
+      "origin": {
+        "type": "string",
+        "description": "Three-letter IATA airport code for departure (e.g., JFK)"
+      },
+      "destination": {
+        "type": "string",
+        "description": "Three-letter IATA airport code for arrival (e.g., LAX)"
+      },
+      "departure_date": {
+        "type": "string",
+        "description": "Departure date in YYYY-MM-DD format"
+      },
+      "adults": {
+        "type": "integer",
+        "description": "Number of adult passengers (default: 1)"
+      },
+      "max_results": {
+        "type": "integer",
+        "description": "Maximum number of flight results (default: 5)"
+      }
+    }
+  }
+}
