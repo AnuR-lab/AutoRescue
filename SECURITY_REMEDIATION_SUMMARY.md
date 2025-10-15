@@ -123,8 +123,8 @@
 The following credentials were exposed in git history and should be rotated:
 
 ### Cognito (ROTATE RECOMMENDED)
-- Client ID: `5ptprke4sq904kc6kv067d4mjo`
-- Client Secret: `1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r`
+- Client ID: `[REDACTED]`
+- Client Secret: `[REDACTED]`
 - User Pool: `us-east-1_Mfzoy9ILM`
 
 **How to Rotate:**
@@ -146,12 +146,12 @@ aws secretsmanager update-secret \
 # Delete old app client
 aws cognito-idp delete-user-pool-client \
     --user-pool-id us-east-1_Mfzoy9ILM \
-    --client-id 5ptprke4sq904kc6kv067d4mjo
+    --client-id <OLD_CLIENT_ID_FROM_GIT_HISTORY>
 ```
 
 ### Amadeus (CHECK IF ROTATION NEEDED)
-- Client ID: `EAiOKtslVsY8vTxyT17QoXqdvyl9s67z`
-- Client Secret: `leeAu7flsoGFTmYp`
+- Client ID: `[REDACTED]`
+- Client Secret: `[REDACTED]`
 
 **How to Rotate:**
 1. Go to https://developers.amadeus.com/my-apps

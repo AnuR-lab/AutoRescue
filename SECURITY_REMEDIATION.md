@@ -7,10 +7,10 @@ GitGuardian detected exposed AWS Cognito OAuth 2.0 credentials in the repository
 ## Exposed Credentials (Require Rotation)
 
 The following credentials were exposed in git history:
-- **Cognito Client ID**: 5ptprke4sq904kc6kv067d4mjo
-- **Cognito Client Secret**: 1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r
-- **Amadeus Client ID**: EAiOKtslVsY8vTxyT17QoXqdvyl9s67z
-- **Amadeus Client Secret**: leeAu7flsoGFTmYp
+- **Cognito Client ID**: [REDACTED]
+- **Cognito Client Secret**: [REDACTED]
+- **Amadeus Client ID**: [REDACTED]
+- **Amadeus Client Secret**: [REDACTED]
 
 ## Remediation Steps
 
@@ -161,7 +161,7 @@ agentcore invoke '{"prompt": "Find me flights from JFK to LAX on December 25, 20
    ```bash
    aws cognito-idp delete-user-pool-client \
        --user-pool-id us-east-1_Mfzoy9ILM \
-       --client-id 5ptprke4sq904kc6kv067d4mjo
+       --client-id <OLD_CLIENT_ID_FROM_GIT_HISTORY>
    ```
 
 ### Rotate Amadeus Credentials

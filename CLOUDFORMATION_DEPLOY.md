@@ -84,8 +84,8 @@ aws cloudformation create-stack \
 
 | Parameter | Description | Default | Required |
 |-----------|-------------|---------|----------|
-| `AmadeusClientID` | Amadeus API Client ID | EAiOKtslVsY8vTxyT17QoXqdvyl9s67z | Yes |
-| `AmadeusClientSecret` | Amadeus API Client Secret | leeAu7flsoGFTmYp | Yes |
+| `AmadeusClientID` | [DEPRECATED] Amadeus API Client ID - Now in Secrets Manager | PLACEHOLDER | No |
+| `AmadeusClientSecret` | [DEPRECATED] Amadeus API Client Secret - Now in Secrets Manager | PLACEHOLDER | No |
 | `KeyName` | EC2 Key Pair for SSH access | (empty) | No |
 | `InstanceType` | EC2 instance type | t2.micro | No |
 

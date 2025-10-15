@@ -125,8 +125,8 @@ Resources:
           urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
           
           # Amadeus API credentials
-          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'EAiOKtslVsY8vTxyT17QoXqdvyl9s67z')
-          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'leeAu7flsoGFTmYp')
+          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
+          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
           
           # API endpoints
           TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
@@ -256,8 +256,8 @@ Resources:
           urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
           
           # Amadeus API credentials
-          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'EAiOKtslVsY8vTxyT17QoXqdvyl9s67z')
-          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'leeAu7flsoGFTmYp')
+          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
+          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'PLACEHOLDER_FETCH_FROM_SECRETS_MANAGER')
           
           # API endpoints
           TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
