@@ -14,8 +14,10 @@ NC='\033[0m' # No Color
 AGENT_DIR="agent_runtime"
 ENTRYPOINT="autorescue_agent.py"
 GATEWAY_URL="https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
-COGNITO_CLIENT_ID="5ptprke4sq904kc6kv067d4mjo"
-COGNITO_CLIENT_SECRET="1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r"
+# WARNING: Credentials are now fetched from AWS Secrets Manager at runtime
+# These variables are no longer used - kept for reference only
+COGNITO_CLIENT_ID="${COGNITO_CLIENT_ID:-YOUR_COGNITO_CLIENT_ID_HERE}"
+COGNITO_CLIENT_SECRET="${COGNITO_CLIENT_SECRET:-YOUR_COGNITO_CLIENT_SECRET_HERE}"
 COGNITO_DOMAIN="autorescue-1760552868.auth.us-east-1.amazoncognito.com"
 MODEL_ID="us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 

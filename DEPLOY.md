@@ -37,9 +37,9 @@ AutoRescue is an AI-powered flight booking and cancellation assistant built with
    aws configure
    ```
 3. **Python 3.12+** installed
-4. **Amadeus API Credentials** (already configured in Lambda code)
-   - Client ID: `EAiOKtslVsY8vTxyT17QoXqdvyl9s67z`
-   - Client Secret: `leeAu7flsoGFTmYp`
+4. **Amadeus API Credentials** 
+   - Stored in AWS Secrets Manager: `autorescue/amadeus/credentials`
+   - See `SECURITY_REMEDIATION.md` for credential setup
 
 ### Verify Prerequisites
 
@@ -442,10 +442,9 @@ cat .cognito_oauth_config | python3 -c "import sys, json; print(json.load(sys.st
 
 **Solution**:
 ```bash
-# Update Lambda environment variables
-aws lambda update-function-configuration \
-  --function-name AutoRescue-SearchFlights \
-  --environment "Variables={AMADEUS_CLIENT_ID=EAiOKtslVsY8vTxyT17QoXqdvyl9s67z,AMADEUS_CLIENT_SECRET=leeAu7flsoGFTmYp}"
+# WARNING: Credentials are now fetched from AWS Secrets Manager at runtime
+# Lambda functions no longer need these environment variables
+# See SECURITY_REMEDIATION.md for credential management
 ```
 
 ### View Logs

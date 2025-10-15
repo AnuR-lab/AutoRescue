@@ -8,3 +8,40 @@ wheels/
 
 # Virtual environments
 .venv
+venv/
+
+# Secrets and credentials
+.cognito_client_info
+.cognito_oauth_config
+.env
+.env.local
+.env.*
+*.pem
+*.key
+secrets.yaml
+credentials.json
+*_credentials.json
+*_secrets.json
+config.json
+aws_credentials
+.secrets/
+secrets/
+
+# Never commit these patterns
+*secret*
+*password*
+*token*
+*api_key*
+*client_id*
+*client_secret*
+
+# AWS and deployment
+.bedrock_agentcore/
+.aws/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

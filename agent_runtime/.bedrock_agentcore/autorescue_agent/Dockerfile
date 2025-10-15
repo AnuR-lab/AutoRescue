@@ -8,7 +8,9 @@ ENV UV_SYSTEM_PYTHON=1 \
     PYTHONUNBUFFERED=1 \
     DOCKER_CONTAINER=1 \
     AWS_REGION=us-east-1 \
-    AWS_DEFAULT_REGION=us-east-1
+    AWS_DEFAULT_REGION=us-east-1 \
+    BEDROCK_AGENTCORE_MEMORY_ID=autorescue_agent_mem-4Juts3EkS9 \
+    BEDROCK_AGENTCORE_MEMORY_NAME=autorescue_agent_mem
 
 
 

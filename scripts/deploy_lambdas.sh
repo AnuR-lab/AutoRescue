@@ -109,8 +109,10 @@ deploy_lambda() {
     
     echo "  Package size: $(du -h deployment.zip | cut -f1)"
     
-    # Set environment variables for Lambda (use credentials from hardcoded values)
-    ENV_VARS="Variables={AMADEUS_CLIENT_ID=EAiOKtslVsY8vTxyT17QoXqdvyl9s67z,AMADEUS_CLIENT_SECRET=leeAu7flsoGFTmYp}"
+    # WARNING: Credentials are now stored in AWS Secrets Manager
+    # Lambda functions fetch credentials at runtime using boto3
+    # These environment variables are no longer needed
+    ENV_VARS="Variables={AMADEUS_CLIENT_ID=PLACEHOLDER,AMADEUS_CLIENT_SECRET=PLACEHOLDER}"
     
     # Check if function exists
     if aws lambda get-function --function-name "$FUNCTION_NAME" --region "$AWS_REGION" 2>/dev/null; then

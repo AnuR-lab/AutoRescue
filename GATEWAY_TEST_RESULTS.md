@@ -33,8 +33,8 @@ Successfully validated the complete end-to-end AutoRescue AgentCore Gateway depl
 | Component | Value |
 |-----------|-------|
 | **Cognito User Pool** | `us-east-1_b3kDoz4Dc` |
-| **Client ID** | `5ptprke4sq904kc6kv067d4mjo` |
-| **Client Secret** | `1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r` |
+| **Client ID** | `[REDACTED - Now in AWS Secrets Manager: autorescue/cognito/credentials]` |
+| **Client Secret** | `[REDACTED - Now in AWS Secrets Manager: autorescue/cognito/credentials]` |
 | **Token URL** | `https://autorescue-1760552868.auth.us-east-1.amazoncognito.com/oauth2/token` |
 | **Grant Type** | `client_credentials` |
 | **Token Expiry** | 3600 seconds (1 hour) |
@@ -175,7 +175,7 @@ Successfully validated the complete end-to-end AutoRescue AgentCore Gateway depl
 | **Lambda Function 1** | ✅ DEPLOYED | AutoRescue-SearchFlights |
 | **Lambda Function 2** | ✅ DEPLOYED | AutoRescue-AnalyzeDisruption |
 | **Cognito User Pool** | ✅ ACTIVE | us-east-1_b3kDoz4Dc |
-| **Cognito Client** | ✅ ACTIVE | 5ptprke4sq904kc6kv067d4mjo |
+| **Cognito Client** | ✅ ACTIVE | [REDACTED - In Secrets Manager] |
 | **Amadeus API** | ✅ CONNECTED | Test environment |
 
 ### Data Flow Verification
@@ -227,9 +227,14 @@ The script automatically:
 
 #### 1. Get Access Token
 ```bash
+# WARNING: Credentials now stored in AWS Secrets Manager
+# For testing, export credentials as environment variables:
+# export COGNITO_CLIENT_ID="your_client_id"
+# export COGNITO_CLIENT_SECRET="your_client_secret"
+
 curl -X POST https://autorescue-1760552868.auth.us-east-1.amazoncognito.com/oauth2/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=5ptprke4sq904kc6kv067d4mjo&client_secret=1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r"
+  -d "grant_type=client_credentials&client_id=${COGNITO_CLIENT_ID}&client_secret=${COGNITO_CLIENT_SECRET}"
 ```
 
 #### 2. List Tools

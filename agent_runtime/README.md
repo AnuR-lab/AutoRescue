@@ -216,7 +216,7 @@ requests==2.32.5     # HTTP client
 - **Authentication**: OAuth2 Client Credentials (Cognito)
 
 ### Cognito OAuth2
-- **Client ID**: `5ptprke4sq904kc6kv067d4mjo`
+- **Credentials**: Stored in AWS Secrets Manager (`autorescue/cognito/credentials`)
 - **Token URL**: `https://autorescue-1760552868.auth.us-east-1.amazoncognito.com/oauth2/token`
 - **Grant Type**: `client_credentials`
 - **Scopes**: `autorescue-api/flights.read`, `flights.search`, `disruptions.analyze`

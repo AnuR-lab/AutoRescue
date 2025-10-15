@@ -67,20 +67,9 @@ echo ""
 export GATEWAY_URL="https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
 export BEDROCK_MODEL_ID="us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 
-# Get OAuth token
-echo "Fetching OAuth2 token..."
-TOKEN_RESPONSE=$(curl -s -X POST "https://autorescue-1760552868.auth.us-east-1.amazoncognito.com/oauth2/token" \
-    -H "Content-Type: application/x-www-form-urlencoded" \
-    -d "grant_type=client_credentials&client_id=5ptprke4sq904kc6kv067d4mjo&client_secret=1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r")
-
-export ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['access_token'])")
-
-if [ -z "$ACCESS_TOKEN" ]; then
-    echo "❌ Failed to obtain OAuth2 token"
-    exit 1
-fi
-
-echo "✓ OAuth2 token obtained"
+# Note: OAuth credentials are now fetched from AWS Secrets Manager at runtime
+# The agent's IAM role has been granted secretsmanager:GetSecretValue permission
+echo "✓ Agent will fetch OAuth credentials from AWS Secrets Manager"
 echo ""
 
 # Deploy with AWS credentials
@@ -89,7 +78,6 @@ AWS_SECRET_ACCESS_KEY="$AWS_SECRET_ACCESS_KEY" \
 AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN" \
 AWS_REGION="${AWS_REGION:-us-east-1}" \
 GATEWAY_URL="$GATEWAY_URL" \
-ACCESS_TOKEN="$ACCESS_TOKEN" \
 BEDROCK_MODEL_ID="$BEDROCK_MODEL_ID" \
 agentcore launch
 

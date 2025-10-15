@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EC2 instance for Streamlit Lounge Access Advisor App with UV'
+Description: 'AutoRescue Flight Assistant - Lambda Functions, IAM Roles, and EC2 for Streamlit UI'
 
 Parameters:
   KeyName:
@@ -15,8 +15,399 @@ Parameters:
       - t2.micro
       - t2.small
       - t2.medium
+  
+  # WARNING: Credentials are now stored in AWS Secrets Manager
+  # These parameters are deprecated - Lambda functions fetch credentials at runtime
+  # To use this template, either:
+  # 1. Remove these parameters and environment variable references in Lambda code
+  # 2. Or provide placeholder values (not used)
+  AmadeusClientID:
+    Description: '[DEPRECATED] Amadeus API Client ID - Now in Secrets Manager'
+    Type: String
+    Default: 'PLACEHOLDER_NOT_USED'
+    NoEcho: true
+  
+  AmadeusClientSecret:
+    Description: '[DEPRECATED] Amadeus API Client Secret - Now in Secrets Manager'
+    Type: String
+    Default: 'PLACEHOLDER_NOT_USED'
+    NoEcho: true
 
 Resources:
+  # ==========================================
+  # Lambda Functions and IAM Roles
+  # ==========================================
+  
+  # IAM Role for Search Flights Lambda
+  SearchFlightsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AutoRescue-SearchFlights-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AmadeusAPIAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/AutoRescue-SearchFlights:*'
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # IAM Role for Analyze Disruption Lambda
+  AnalyzeDisruptionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AutoRescue-AnalyzeDisruption-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AmadeusAPIAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/AutoRescue-AnalyzeDisruption:*'
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # Search Flights Lambda Function
+  SearchFlightsLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AutoRescue-SearchFlights
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt SearchFlightsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          AMADEUS_CLIENT_ID: !Ref AmadeusClientID
+          AMADEUS_CLIENT_SECRET: !Ref AmadeusClientSecret
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import urllib3
+          from datetime import datetime, timedelta
+          
+          # Disable SSL warnings for development
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+          
+          # Amadeus API credentials
+          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'EAiOKtslVsY8vTxyT17QoXqdvyl9s67z')
+          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'leeAu7flsoGFTmYp')
+          
+          # API endpoints
+          TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
+          FLIGHTS_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+          
+          def get_access_token():
+              """Get OAuth2 access token from Amadeus"""
+              http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
+              
+              headers = {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+              }
+              
+              body = f"grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}"
+              
+              try:
+                  response = http.request(
+                      'POST',
+                      TOKEN_URL,
+                      body=body,
+                      headers=headers
+                  )
+                  
+                  if response.status == 200:
+                      token_data = json.loads(response.data.decode('utf-8'))
+                      return token_data.get('access_token')
+                  else:
+                      raise Exception(f"Token request failed: {response.status}")
+              except Exception as e:
+                  raise Exception(f"Error getting access token: {str(e)}")
+          
+          def search_flights(origin, destination, departure_date, adults=1, max_results=5):
+              """Search for flights using Amadeus API"""
+              access_token = get_access_token()
+              
+              http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
+              
+              headers = {
+                  'Authorization': f'Bearer {access_token}'
+              }
+              
+              params = {
+                  'originLocationCode': origin,
+                  'destinationLocationCode': destination,
+                  'departureDate': departure_date,
+                  'adults': str(adults),
+                  'max': str(max_results),
+                  'currencyCode': 'USD'
+              }
+              
+              query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+              url = f"{FLIGHTS_URL}?{query_string}"
+              
+              try:
+                  response = http.request('GET', url, headers=headers)
+                  
+                  if response.status == 200:
+                      return json.loads(response.data.decode('utf-8'))
+                  else:
+                      error_data = json.loads(response.data.decode('utf-8'))
+                      raise Exception(f"Flight search failed: {error_data}")
+              except Exception as e:
+                  raise Exception(f"Error searching flights: {str(e)}")
+          
+          def lambda_handler(event, context):
+              """Lambda handler for flight search"""
+              try:
+                  # Parse input
+                  body = json.loads(event.get('body', '{}')) if isinstance(event.get('body'), str) else event.get('body', {})
+                  
+                  origin = body.get('origin') or event.get('origin')
+                  destination = body.get('destination') or event.get('destination')
+                  departure_date = body.get('departureDate') or event.get('departureDate')
+                  adults = int(body.get('adults', event.get('adults', 1)))
+                  
+                  if not all([origin, destination, departure_date]):
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({
+                              'error': 'Missing required parameters: origin, destination, departureDate'
+                          })
+                      }
+                  
+                  # Search flights
+                  results = search_flights(origin, destination, departure_date, adults)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(results)
+                  }
+                  
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # Analyze Disruption Lambda Function
+  AnalyzeDisruptionLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: AutoRescue-AnalyzeDisruption
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt AnalyzeDisruptionLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          AMADEUS_CLIENT_ID: !Ref AmadeusClientID
+          AMADEUS_CLIENT_SECRET: !Ref AmadeusClientSecret
+      Code:
+        ZipFile: |
+          import json
+          import os
+          import urllib3
+          from datetime import datetime, timedelta
+          
+          # Disable SSL warnings for development
+          urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+          
+          # Amadeus API credentials
+          CLIENT_ID = os.environ.get('AMADEUS_CLIENT_ID', 'EAiOKtslVsY8vTxyT17QoXqdvyl9s67z')
+          CLIENT_SECRET = os.environ.get('AMADEUS_CLIENT_SECRET', 'leeAu7flsoGFTmYp')
+          
+          # API endpoints
+          TOKEN_URL = "https://test.api.amadeus.com/v1/security/oauth2/token"
+          FLIGHTS_URL = "https://test.api.amadeus.com/v2/shopping/flight-offers"
+          
+          def get_access_token():
+              """Get OAuth2 access token from Amadeus"""
+              http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
+              
+              headers = {
+                  'Content-Type': 'application/x-www-form-urlencoded'
+              }
+              
+              body = f"grant_type=client_credentials&client_id={CLIENT_ID}&client_secret={CLIENT_SECRET}"
+              
+              try:
+                  response = http.request(
+                      'POST',
+                      TOKEN_URL,
+                      body=body,
+                      headers=headers
+                  )
+                  
+                  if response.status == 200:
+                      token_data = json.loads(response.data.decode('utf-8'))
+                      return token_data.get('access_token')
+                  else:
+                      raise Exception(f"Token request failed: {response.status}")
+              except Exception as e:
+                  raise Exception(f"Error getting access token: {str(e)}")
+          
+          def search_alternative_flights(origin, destination, original_date, days_to_search=3):
+              """Search for alternative flights around the disruption date"""
+              access_token = get_access_token()
+              http = urllib3.PoolManager(cert_reqs='CERT_NONE', assert_hostname=False)
+              
+              headers = {
+                  'Authorization': f'Bearer {access_token}'
+              }
+              
+              all_alternatives = {
+                  'same_day': [],
+                  'next_day': [],
+                  'alternative_dates': []
+              }
+              
+              original_datetime = datetime.strptime(original_date, '%Y-%m-%d')
+              
+              for day_offset in range(days_to_search):
+                  search_date = original_datetime + timedelta(days=day_offset)
+                  search_date_str = search_date.strftime('%Y-%m-%d')
+                  
+                  params = {
+                      'originLocationCode': origin,
+                      'destinationLocationCode': destination,
+                      'departureDate': search_date_str,
+                      'adults': '1',
+                      'max': '5',
+                      'currencyCode': 'USD'
+                  }
+                  
+                  query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+                  url = f"{FLIGHTS_URL}?{query_string}"
+                  
+                  try:
+                      response = http.request('GET', url, headers=headers)
+                      
+                      if response.status == 200:
+                          flight_data = json.loads(response.data.decode('utf-8'))
+                          flights = flight_data.get('data', [])
+                          
+                          if day_offset == 0:
+                              all_alternatives['same_day'] = flights
+                          elif day_offset == 1:
+                              all_alternatives['next_day'] = flights
+                          else:
+                              all_alternatives['alternative_dates'].extend(flights)
+                  except Exception as e:
+                      print(f"Error searching flights for {search_date_str}: {str(e)}")
+                      continue
+              
+              return all_alternatives
+          
+          def lambda_handler(event, context):
+              """Lambda handler for disruption analysis"""
+              try:
+                  # Parse input
+                  body = json.loads(event.get('body', '{}')) if isinstance(event.get('body'), str) else event.get('body', {})
+                  
+                  flight_number = body.get('flightNumber') or event.get('flightNumber')
+                  origin = body.get('origin') or event.get('origin')
+                  destination = body.get('destination') or event.get('destination')
+                  original_date = body.get('originalDate') or event.get('originalDate')
+                  disruption_type = body.get('disruptionType', event.get('disruptionType', 'cancellation'))
+                  
+                  if not all([origin, destination, original_date]):
+                      return {
+                          'statusCode': 400,
+                          'body': json.dumps({
+                              'error': 'Missing required parameters: origin, destination, originalDate'
+                          })
+                      }
+                  
+                  # Search for alternatives
+                  alternatives = search_alternative_flights(origin, destination, original_date)
+                  
+                  response = {
+                      'disruption': {
+                          'flightNumber': flight_number,
+                          'type': disruption_type,
+                          'originalRoute': f"{origin} to {destination}",
+                          'originalDate': original_date
+                      },
+                      'alternatives': alternatives
+                  }
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps(response)
+                  }
+                  
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # CloudWatch Log Groups
+  SearchFlightsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SearchFlightsLambda}'
+      RetentionInDays: 7
+
+  AnalyzeDisruptionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${AnalyzeDisruptionLambda}'
+      RetentionInDays: 7
+
+  # ==========================================
+  # Streamlit EC2 Instance (Optional)
+  # ==========================================
   # Security Group
   StreamlitSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -136,13 +527,43 @@ Conditions:
   HasKeyName: !Not [!Equals [!Ref KeyName, '']]
 
 Outputs:
+  # Lambda Outputs
+  SearchFlightsLambdaArn:
+    Description: ARN of Search Flights Lambda Function
+    Value: !GetAtt SearchFlightsLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SearchFlightsLambdaArn'
+  
+  AnalyzeDisruptionLambdaArn:
+    Description: ARN of Analyze Disruption Lambda Function
+    Value: !GetAtt AnalyzeDisruptionLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyzeDisruptionLambdaArn'
+  
+  SearchFlightsLambdaName:
+    Description: Name of Search Flights Lambda Function
+    Value: !Ref SearchFlightsLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-SearchFlightsLambdaName'
+  
+  AnalyzeDisruptionLambdaName:
+    Description: Name of Analyze Disruption Lambda Function
+    Value: !Ref AnalyzeDisruptionLambda
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyzeDisruptionLambdaName'
+  
+  # EC2 Outputs
   InstanceId:
     Description: EC2 Instance ID
     Value: !Ref StreamlitEC2Instance
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceId'
     
   PublicIP:
     Description: Public IP address
     Value: !GetAtt StreamlitEC2Instance.PublicIp
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicIP'
     
   StreamlitURL:
     Description: Streamlit application URL
@@ -151,3 +572,22 @@ Outputs:
   SSHCommand:
     Description: SSH command to connect
     Value: !Sub 'ssh -i your-key.pem ec2-user@${StreamlitEC2Instance.PublicIp}'
+  
+  # Summary
+  DeploymentSummary:
+    Description: Deployment Summary
+    Value: !Sub |
+      AutoRescue Stack Deployed Successfully!
+      
+      Lambda Functions:
+      - Search Flights: ${SearchFlightsLambda}
+      - Analyze Disruption: ${AnalyzeDisruptionLambda}
+      
+      Streamlit UI:
+      - URL: http://${StreamlitEC2Instance.PublicIp}:8501
+      - SSH: ssh -i your-key.pem ec2-user@${StreamlitEC2Instance.PublicIp}
+      
+      Next Steps:
+      1. Create AgentCore Gateway and targets using the Lambda ARNs
+      2. Deploy the agent using agentcore CLI
+      3. Access Streamlit UI for testing

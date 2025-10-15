@@ -4,8 +4,10 @@ Provides flight search and disruption analysis capabilities
 """
 
 import os
+import json
+import boto3
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime
 import requests
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
@@ -30,12 +32,46 @@ GATEWAY_URL = os.getenv(
     "https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
 )
 
-# Cognito OAuth2 Configuration
-COGNITO_CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "5ptprke4sq904kc6kv067d4mjo")
-COGNITO_CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET", "1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r")
+# Cognito Domain Configuration
 COGNITO_DOMAIN = os.getenv("COGNITO_DOMAIN", "autorescue-1760552868.auth.us-east-1.amazoncognito.com")
 
+# Secrets cache
+_secrets_cache = {
+    'cognito_credentials': None,
+    'fetched_at': None
+}
+
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # Allow override via env var
+
+
+def _get_cognito_credentials() -> Dict[str, str]:
+    """
+    Fetch Cognito credentials from AWS Secrets Manager with caching
+    """
+    # Return cached credentials if recently fetched (within 1 hour)
+    if _secrets_cache['cognito_credentials'] and _secrets_cache['fetched_at']:
+        elapsed = datetime.now() - _secrets_cache['fetched_at']
+        if elapsed.total_seconds() < 3600:
+            return _secrets_cache['cognito_credentials']
+    
+    # Fetch from Secrets Manager
+    secret_name = "autorescue/cognito/credentials"
+    region_name = os.getenv('AWS_REGION', 'us-east-1')
+    
+    client = boto3.client('secretsmanager', region_name=region_name)
+    
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secret = json.loads(response['SecretString'])
+        
+        # Cache the credentials
+        _secrets_cache['cognito_credentials'] = secret
+        _secrets_cache['fetched_at'] = datetime.now()
+        
+        return secret
+    except Exception as e:
+        logger.error(f"Failed to fetch Cognito credentials: {e}")
+        raise RuntimeError(f"Failed to fetch Cognito credentials from Secrets Manager: {str(e)}")
 
 # Model Configuration
 MODEL_ID = os.getenv(
@@ -60,6 +96,9 @@ def fetch_oauth_token() -> str:
     Raises:
         Exception: If token fetch fails
     """
+    # Get credentials from Secrets Manager
+    credentials = _get_cognito_credentials()
+    
     token_url = f"https://{COGNITO_DOMAIN}/oauth2/token"
     
     try:
@@ -67,7 +106,7 @@ def fetch_oauth_token() -> str:
         response = requests.post(
             token_url,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            data=f"grant_type=client_credentials&client_id={COGNITO_CLIENT_ID}&client_secret={COGNITO_CLIENT_SECRET}",
+            data=f"grant_type=client_credentials&client_id={credentials['client_id']}&client_secret={credentials['client_secret']}",
             timeout=10
         )
         response.raise_for_status()

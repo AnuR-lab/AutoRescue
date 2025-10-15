@@ -7,10 +7,12 @@ Tests OAuth2 authentication and MCP protocol tool invocation
 import requests
 import json
 import sys
+import os
 
 # Cognito OAuth2 Configuration
-CLIENT_ID = "5ptprke4sq904kc6kv067d4mjo"
-CLIENT_SECRET = "1k7ajt3pg59q2ef1oa9g449jteomhik63qod7e9vpckl0flnnp0r"
+# WARNING: Do not hardcode credentials! Use environment variables or AWS Secrets Manager
+CLIENT_ID = os.getenv("COGNITO_CLIENT_ID", "YOUR_COGNITO_CLIENT_ID_HERE")
+CLIENT_SECRET = os.getenv("COGNITO_CLIENT_SECRET", "YOUR_COGNITO_CLIENT_SECRET_HERE")
 TOKEN_URL = "https://autorescue-1760552868.auth.us-east-1.amazoncognito.com/oauth2/token"
 
 # Gateway Configuration

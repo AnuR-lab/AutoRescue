@@ -5,6 +5,7 @@ Invoked by AgentCore Gateway
 """
 import os
 import json
+import boto3
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, Any
@@ -12,14 +13,47 @@ from typing import Dict, Any
 
 # Amadeus API Configuration
 AMADEUS_BASE_URL = "https://test.api.amadeus.com"
-AMADEUS_CLIENT_ID = os.getenv('AMADEUS_CLIENT_ID', 'EAiOKtslVsY8vTxyT17QoXqdvyl9s67z')
-AMADEUS_CLIENT_SECRET = os.getenv('AMADEUS_CLIENT_SECRET', 'leeAu7flsoGFTmYp')
+
+# Secrets cache (Lambda container reuse)
+_secrets_cache = {
+    'amadeus_credentials': None,
+    'fetched_at': None
+}
 
 # Token cache (Lambda container reuse)
 _token_cache = {
     'access_token': None,
     'expiry': None
 }
+
+
+def _get_amadeus_credentials() -> Dict[str, str]:
+    """
+    Fetch Amadeus credentials from AWS Secrets Manager with caching
+    """
+    # Return cached credentials if recently fetched (within 1 hour)
+    if _secrets_cache['amadeus_credentials'] and _secrets_cache['fetched_at']:
+        elapsed = datetime.now() - _secrets_cache['fetched_at']
+        if elapsed.total_seconds() < 3600:
+            return _secrets_cache['amadeus_credentials']
+    
+    # Fetch from Secrets Manager
+    secret_name = "autorescue/amadeus/credentials"
+    region_name = os.getenv('AWS_REGION', 'us-east-1')
+    
+    client = boto3.client('secretsmanager', region_name=region_name)
+    
+    try:
+        response = client.get_secret_value(SecretId=secret_name)
+        secret = json.loads(response['SecretString'])
+        
+        # Cache the credentials
+        _secrets_cache['amadeus_credentials'] = secret
+        _secrets_cache['fetched_at'] = datetime.now()
+        
+        return secret
+    except Exception as e:
+        raise RuntimeError(f"Failed to fetch Amadeus credentials from Secrets Manager: {str(e)}")
 
 
 def _get_amadeus_token() -> str:
@@ -32,13 +66,16 @@ def _get_amadeus_token() -> str:
     if _token_cache['access_token'] and _token_cache['expiry'] and now < _token_cache['expiry']:
         return _token_cache['access_token']
     
+    # Get credentials from Secrets Manager
+    credentials = _get_amadeus_credentials()
+    
     # Request new token
     url = f"{AMADEUS_BASE_URL}/v1/security/oauth2/token"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     data = {
         "grant_type": "client_credentials",
-        "client_id": AMADEUS_CLIENT_ID,
-        "client_secret": AMADEUS_CLIENT_SECRET
+        "client_id": credentials['client_id'],
+        "client_secret": credentials['client_secret']
     }
     
     response = requests.post(url, headers=headers, data=data)
