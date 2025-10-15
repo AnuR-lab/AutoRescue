@@ -23,7 +23,7 @@ agents:
     bedrock_agentcore:
       agent_id: autorescue_agent-KyZlYU4Lgs
       agent_arn: arn:aws:bedrock-agentcore:us-east-1:905418267822:runtime/autorescue_agent-KyZlYU4Lgs
-      agent_session_id: null
+      agent_session_id: 8af27992-452e-4965-bccf-7a85067f7dca
     codebuild:
       project_name: bedrock-agentcore-autorescue_agent-builder
       execution_role: arn:aws:iam::905418267822:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-c76824e496
@@ -34,7 +34,7 @@ agents:
       memory_arn: arn:aws:bedrock-agentcore:us-east-1:905418267822:memory/autorescue_agent_mem-4Juts3EkS9
       memory_name: autorescue_agent_mem
       event_expiry_days: 30
-      first_invoke_memory_check_done: false
+      first_invoke_memory_check_done: true
       was_created_by_toolkit: false
     authorizer_configuration: null
     request_header_configuration: null

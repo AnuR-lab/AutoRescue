@@ -30,24 +30,46 @@ echo -e "${GREEN}✅ AWS Account: ${ACCOUNT_ID}${NC}"
 echo ""
 
 # Step 1: Package Search Flights Lambda
-echo -e "${YELLOW}[1/4] Packaging SearchFlights Lambda...${NC}"
+echo -e "${YELLOW}[1/4] Packaging SearchFlights Lambda with dependencies...${NC}"
 cd lambda_functions/search_flights
 if [ -f lambda_package.zip ]; then
     rm lambda_package.zip
 fi
-zip -q lambda_package.zip lambda_function.py
-echo -e "${GREEN}✅ Package created: search_flights/lambda_package.zip${NC}"
+# Create temporary directory for packaging
+mkdir -p package
+# Install dependencies
+pip install -q requests boto3 -t package/ --no-cache-dir
+# Copy lambda function as index.py
+cp lambda_function.py package/index.py
+# Create ZIP from package directory
+cd package
+zip -qr ../lambda_package.zip .
+cd ..
+# Cleanup
+rm -rf package
+echo -e "${GREEN}✅ Package created: search_flights/lambda_package.zip (with dependencies)${NC}"
 cd ../..
 echo ""
 
 # Step 2: Package Analyze Disruption Lambda
-echo -e "${YELLOW}[2/4] Packaging AnalyzeDisruption Lambda...${NC}"
+echo -e "${YELLOW}[2/4] Packaging AnalyzeDisruption Lambda with dependencies...${NC}"
 cd lambda_functions/analyze_disruption
 if [ -f lambda_package.zip ]; then
     rm lambda_package.zip
 fi
-zip -q lambda_package.zip lambda_function.py
-echo -e "${GREEN}✅ Package created: analyze_disruption/lambda_package.zip${NC}"
+# Create temporary directory for packaging
+mkdir -p package
+# Install dependencies
+pip install -q requests boto3 -t package/ --no-cache-dir
+# Copy lambda function as index.py
+cp lambda_function.py package/index.py
+# Create ZIP from package directory
+cd package
+zip -qr ../lambda_package.zip .
+cd ..
+# Cleanup
+rm -rf package
+echo -e "${GREEN}✅ Package created: analyze_disruption/lambda_package.zip (with dependencies)${NC}"
 cd ../..
 echo ""
 

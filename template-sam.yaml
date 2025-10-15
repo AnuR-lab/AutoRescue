@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'AutoRescue Flight Assistant - Lambda Functions with Dependencies'
+
+Resources:
+  # IAM Role for Search Flights Lambda
+  SearchFlightsLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AutoRescue-SearchFlights-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:autorescue/amadeus/credentials-*'
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # IAM Role for Analyze Disruption Lambda
+  AnalyzeDisruptionLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: AutoRescue-AnalyzeDisruption-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:autorescue/amadeus/credentials-*'
+      Tags:
+        - Key: Application
+          Value: AutoRescue
+        - Key: Component
+          Value: Lambda
+
+  # Search Flights Lambda Function
+  SearchFlightsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AutoRescue-SearchFlights
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt SearchFlightsLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      CodeUri: lambda_functions/search_flights/
+      Tags:
+        Application: AutoRescue
+        Component: Lambda
+
+  # Analyze Disruption Lambda Function
+  AnalyzeDisruptionFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: AutoRescue-AnalyzeDisruption
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt AnalyzeDisruptionLambdaRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      CodeUri: lambda_functions/analyze_disruption/
+      Tags:
+        Application: AutoRescue
+        Component: Lambda
+
+Outputs:
+  SearchFlightsLambdaArn:
+    Description: ARN of the Search Flights Lambda Function
+    Value: !GetAtt SearchFlightsFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SearchFlightsArn'
+  
+  AnalyzeDisruptionLambdaArn:
+    Description: ARN of the Analyze Disruption Lambda Function
+    Value: !GetAtt AnalyzeDisruptionFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyzeDisruptionArn'
+  
+  SearchFlightsLambdaName:
+    Description: Name of the Search Flights Lambda Function
+    Value: !Ref SearchFlightsFunction
+  
+  AnalyzeDisruptionLambdaName:
+    Description: Name of the Analyze Disruption Lambda Function
+    Value: !Ref AnalyzeDisruptionFunction
