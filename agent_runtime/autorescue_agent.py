@@ -156,7 +156,13 @@ class AutoRescueAgent:
         self.model = BedrockModel(model_id=self.model_id)
         
         # Initialize MCP Gateway Client
+        if not GATEWAY_URL:
+            raise ValueError("GATEWAY_URL environment variable is not set!")
+        
         logger.info(f"Connecting to gateway: {GATEWAY_URL}")
+        logger.info(f"Bearer token present: {bool(bearer_token)}")
+        logger.info(f"Bearer token length: {len(bearer_token) if bearer_token else 0}")
+        
         try:
             self.gateway_client = MCPClient(
                 lambda: streamablehttp_client(
@@ -164,10 +170,12 @@ class AutoRescueAgent:
                     headers={"Authorization": f"Bearer {bearer_token}"}
                 )
             )
+            logger.info("MCPClient created, starting connection...")
             self.gateway_client.start()
             logger.info("Gateway client started successfully")
         except Exception as e:
-            logger.error(f"Failed to initialize gateway client: {str(e)}")
+            logger.error(f"Failed to initialize gateway client: {str(e)}", exc_info=True)
+            logger.error(f"GATEWAY_URL was: {GATEWAY_URL}")
             raise RuntimeError(f"Error initializing AutoRescue agent: {str(e)}")
         
         # Collect all tools
@@ -276,12 +284,18 @@ def invoke(payload: dict, context=None):
         # Get bearer token - try payload first, then env var, then fetch dynamically
         bearer_token = payload.get("bearer_token") or ACCESS_TOKEN
         
+        logger.info(f"Bearer token from payload: {bool(payload.get('bearer_token'))}")
+        logger.info(f"Bearer token from env: {bool(ACCESS_TOKEN)}")
+        
         if not bearer_token:
             logger.info("No bearer token provided, fetching from Cognito...")
             try:
                 bearer_token = fetch_oauth_token()
+                logger.info("Successfully fetched OAuth token from Cognito")
             except Exception as e:
-                return {"error": f"Failed to obtain OAuth2 token: {str(e)}"}
+                error_msg = f"Failed to obtain OAuth2 token: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                return {"error": error_msg}
         
         logger.info(f"Request received: {user_message[:100]}...")
         
