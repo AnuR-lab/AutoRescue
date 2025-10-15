@@ -1,11 +1,22 @@
 [project]
 name = "autorescue"
 version = "0.1.0"
-description = "Add your description here"
+description = "AI-powered flight booking and cancellation assistant using AWS Bedrock AgentCore"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "streamlit>=1.50.0",
     "streamlit-authenticator>=0.4.2",
     "watchdog>=6.0.0",
+    "agentcore>=0.1.0",
+    "boto3>=1.35.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
 ]
