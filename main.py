@@ -1,28 +1,25 @@
 """
 AutoRescue Flight Assistant - Main Entry Point
-AWS Bedrock AgentCore with MCP Tools
+AWS Bedrock AgentCore with External Lambda Tool Targets
 """
 import os
 from agentcore import Agent
-from amadeus_mcp_tools import (
-    search_flights_tool,
-    analyze_flight_disruption_tool
-)
 
 
 # Initialize the AutoRescue Flight Assistant Agent
+# Tools are registered as external Lambda functions via AgentCore Gateway
 agent = Agent(
     name="AutoRescue Flight Assistant",
     instructions="""You are AutoRescue Flight Assistant, an intelligent AI agent specialized in helping 
     travelers with flight bookings, cancellations, and travel disruptions.
     
     Your capabilities include:
-    1. **Flight Search**: Search for flights for specific dates and routes
-    2. **Disruption Analysis**: Analyze flight cancellations and provide rebooking recommendations
+    1. **Flight Search**: Search for flights for specific dates and routes using search_flights tool
+    2. **Disruption Analysis**: Analyze flight cancellations and provide rebooking recommendations using analyze_disruption tool
     
     When a user mentions a flight cancellation or needs to rebook:
-    1. Use the analyze_flight_disruption tool to understand their situation
-    2. Use the search_flights tool to find alternative flights
+    1. Use the analyze_disruption tool to understand their situation and get recommendations
+    2. Use the search_flights tool to find additional alternative flights if needed
     3. Present options sorted by price and convenience
     4. Highlight the best recommendations based on user preferences
     
@@ -31,13 +28,13 @@ agent = Agent(
     - Flight times and duration
     - Airline and flight numbers
     - Number of stops
+    - Date flexibility options
     
-    Use the MCP tools available to you to fetch real-time flight data from Amadeus API.""",
+    The tools call external AWS Lambda functions that fetch real-time flight data from Amadeus API.
+    Tools are invoked through AgentCore Gateway with OAuth 2.0 authentication.""",
     model="us.anthropic.claude-3-5-sonnet-20241022-v2:0",  # Bedrock model ID
-    tools=[
-        search_flights_tool,
-        analyze_flight_disruption_tool
-    ]
+    # Tools are registered externally via AgentCore Gateway
+    # The gateway routes tool calls to Lambda functions
 )
 
 

@@ -4,25 +4,35 @@
 
 ![Architecture](images/architecture.png)
 
-AutoRescue is an intelligent flight management assistant that helps travelers handle flight cancellations, rebookings, and travel disruptions with ease. Built on AWS Bedrock AgentCore with MCP (Model Context Protocol) tools for seamless Amadeus API integration.
+AutoRescue is an intelligent flight management assistant that helps travelers handle flight cancellations, rebookings, and travel disruptions with ease. Built on AWS Bedrock AgentCore with **Lambda-backed MCP tools** for seamless Amadeus API integration.
 
 ## 🌟 Features
 
-- **Multi-Day Flight Search**: Search flights from today up to 3 days ahead (Step 1 workflow)
-- **Smart Rebooking**: Automated alternative flight recommendations during disruptions
+- **Real-time Flight Search**: Search flights for specific dates and routes
+- **Smart Disruption Analysis**: Automated alternative flight recommendations during cancellations
 - **Real-time Pricing**: Live flight prices and availability from Amadeus API
 - **Conversational AI**: Natural language interface powered by Claude 3.5 Sonnet
-- **Secure Authentication**: Cognito-based user authentication
-- **Memory-Enabled**: Contextual conversations with user preference tracking
+- **Secure Authentication**: Cognito-based user authentication with OAuth 2.0
+- **Memory-Enabled**: Contextual conversations with session tracking
+- **Scalable Architecture**: Independent Lambda functions for each tool
 
 ## 🏗️ Architecture
 
+```
+Customer → AgentCore Runtime → AgentCore Gateway → AWS Lambda → Amadeus API
+              (Agent)              (OAuth 2.0)      (Tools)
+```
+
+### Components
+
 - **AWS Bedrock AgentCore**: Runtime environment for the AI agent
-- **MCP Tools**: Model Context Protocol tools for Amadeus API integration
+- **AgentCore Gateway**: Routes tool calls to Lambda functions with OAuth 2.0
+- **AWS Lambda Functions**: Independent, scalable tool implementations
+  - `AutoRescue-SearchFlights`: Flight search functionality
+  - `AutoRescue-AnalyzeDisruption`: Disruption analysis and rebooking
 - **Amazon Cognito**: User authentication and authorization
-- **AWS Lambda**: Serverless execution
-- **Amadeus Flight API**: Real-time flight data provider
-- **Claude 3.5 Sonnet**: Foundation model for intelligent responses
+- **Amadeus Flight API**: Real-time flight data provider (test environment)
+- **Claude 3.5 Sonnet v2**: Foundation model for intelligent responses
 
 ## 📋 Prerequisites
 
@@ -42,10 +52,15 @@ AutoRescue is an intelligent flight management assistant that helps travelers ha
    - Go to "Model access" and request access to:
      - `anthropic.claude-3-5-sonnet-20241022-v2:0`
 
-4. **Python 3.12+**: Required for running the application
+4. **IAM Permissions**: Required for Lambda and AgentCore deployment
+   - Lambda execution role creation
+   - AgentCore gateway management
+   - Cognito user pool creation
+
+5. **Python 3.12+**: Required for running the application
    - [Python Downloads](https://www.python.org/downloads/)
 
-5. **Amadeus API Credentials**: Sign up for Amadeus for Developers
+6. **Amadeus API Credentials**: Sign up for Amadeus for Developers
    - [Amadeus for Developers](https://developers.amadeus.com/)
    - Get your Client ID and Client Secret (test environment)
 
