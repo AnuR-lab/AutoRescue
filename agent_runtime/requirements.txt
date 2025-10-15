@@ -1,0 +1,5 @@
+bedrock-agentcore
+strands-agents
+boto3==1.40.52
+botocore==1.40.52
+requests==2.32.5
