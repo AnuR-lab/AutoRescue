@@ -284,10 +284,14 @@ def lambda_handler(event, context):
     
     try:
         # Parse input parameters
-        if isinstance(event.get('body'), str):
+        # Handle different event formats: API Gateway (with body) vs Direct invocation
+        if 'body' in event and isinstance(event['body'], str):
             body = json.loads(event['body'])
+        elif 'body' in event and isinstance(event['body'], dict):
+            body = event['body']
         else:
-            body = event.get('body', event)
+            # Direct invocation - parameters are in event root
+            body = event
         
         print(f"[ANALYZE_DISRUPTION] Parsed body: {json.dumps(body)}")
         

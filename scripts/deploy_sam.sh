@@ -81,7 +81,12 @@ else
     cd lambda_functions/search_flights
     if [ -d package ]; then rm -rf package; fi
     mkdir package
-    pip install -q -r requirements.txt -t package/ --no-cache-dir
+    # Use UV or pip depending on availability
+    if command -v uv &> /dev/null; then
+        uv pip install -q -r requirements.txt --target package/ --no-cache
+    else
+        pip install -q -r requirements.txt -t package/ --no-cache-dir
+    fi
     cp index.py package/
     cd package
     zip -qr ../deployment-package.zip .
@@ -95,7 +100,12 @@ else
     cd lambda_functions/analyze_disruption
     if [ -d package ]; then rm -rf package; fi
     mkdir package
-    pip install -q -r requirements.txt -t package/ --no-cache-dir
+    # Use UV or pip depending on availability
+    if command -v uv &> /dev/null; then
+        uv pip install -q -r requirements.txt --target package/ --no-cache
+    else
+        pip install -q -r requirements.txt -t package/ --no-cache-dir
+    fi
     cp index.py package/
     cd package
     zip -qr ../deployment-package.zip .
