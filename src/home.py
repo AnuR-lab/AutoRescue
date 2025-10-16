@@ -13,9 +13,16 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "scr
 
 try:
     from secrets_manager import get_agent_runtime_arn
-except ImportError:
-    st.error("Unable to import secrets_manager. Please check your installation.")
+    SECRETS_MANAGER_AVAILABLE = True
+except ImportError as e:
+    st.warning(f"⚠️ secrets_manager module not available: {e}")
+    st.info("Will try to use AGENT_RUNTIME_ARN from environment variable only.")
     get_agent_runtime_arn = None
+    SECRETS_MANAGER_AVAILABLE = False
+except Exception as e:
+    st.error(f"Error importing secrets_manager: {e}")
+    get_agent_runtime_arn = None
+    SECRETS_MANAGER_AVAILABLE = False
 
 
 def init_agent_runtime():
@@ -28,11 +35,57 @@ def init_agent_runtime():
         AGENT_RUNTIME_ARN = os.getenv("AGENT_RUNTIME_ARN")
 
         # Try to get ARN from environment or Secrets Manager
-        if not AGENT_RUNTIME_ARN and get_agent_runtime_arn:
-            try:
-                AGENT_RUNTIME_ARN = get_agent_runtime_arn(region_name=AWS_REGION)
-            except Exception as e:
-                st.error(f"Failed to retrieve agent runtime ARN: {e}")
+        if not AGENT_RUNTIME_ARN:
+            if SECRETS_MANAGER_AVAILABLE and get_agent_runtime_arn:
+                try:
+                    with st.spinner("Fetching Agent Runtime ARN from AWS Secrets Manager..."):
+                        AGENT_RUNTIME_ARN = get_agent_runtime_arn(region_name=AWS_REGION)
+                    st.success("✓ Agent Runtime ARN retrieved from Secrets Manager")
+                except Exception as e:
+                    st.error(f"❌ Failed to retrieve agent runtime ARN from Secrets Manager: {str(e)}")
+                    with st.expander("📋 Configuration Instructions"):
+                        st.markdown("""
+                        **Option 1: Set Environment Variable**
+                        ```bash
+                        export AGENT_RUNTIME_ARN="your-agent-runtime-arn"
+                        ```
+                        
+                        **Option 2: Create .env file**
+                        ```
+                        AGENT_RUNTIME_ARN=your-agent-runtime-arn
+                        AWS_REGION=us-east-1
+                        ```
+                        
+                        **Option 3: Store in AWS Secrets Manager**
+                        ```bash
+                        python scripts/store_secrets.py
+                        ```
+                        """)
+                    return None
+            else:
+                st.error("❌ AGENT_RUNTIME_ARN not configured. Please check your environment.")
+                with st.expander("📋 How to configure"):
+                    st.markdown("""
+                    The Agent Runtime ARN is required to communicate with AWS Bedrock AgentCore.
+                    
+                    **For Local Development:**
+                    Create a `.env` file in the project root:
+                    ```
+                    AGENT_RUNTIME_ARN=arn:aws:bedrock-agentcore:us-east-1:ACCOUNT:runtime/NAME
+                    AWS_REGION=us-east-1
+                    ```
+                    
+                    **For Server Deployment:**
+                    Store the ARN in AWS Secrets Manager:
+                    ```bash
+                    python scripts/store_secrets.py
+                    ```
+                    
+                    Or set as environment variable:
+                    ```bash
+                    export AGENT_RUNTIME_ARN="your-arn-here"
+                    ```
+                    """)
                 return None
 
         if not AGENT_RUNTIME_ARN:

@@ -27,8 +27,9 @@ aws_credentials
 .secrets/
 secrets/
 
-# Never commit these patterns
+# Never commit these patterns (but allow utility scripts)
 *secret*
+!scripts/secrets_manager.py
 *password*
 *token*
 *api_key*
