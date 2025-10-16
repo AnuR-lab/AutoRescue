@@ -83,99 +83,44 @@ def setup_cognito_oauth():
     
     cognito_client = boto3.client('cognito-idp', region_name=REGION)
     
-    # Check if we already have configuration
-    try:
-        with open('.cognito_oauth_config', 'r') as f:
-            oauth_config = json.load(f)
-        print(f"   ✅ Using existing Cognito configuration")
-        print(f"   🆔 User Pool: {oauth_config['user_pool_id']}")
-        print(f"   🌐 Domain: {oauth_config['domain']}")
-        return oauth_config
-    except FileNotFoundError:
-        pass
+    # Use the existing correct Cognito pool
+    existing_user_pool_id = "us-east-1_CQhouJEy9"  # autorescue-pool-1760631012
+    existing_client_id = "52ejooti3bqaj3v0g4blkqspqv"
+    existing_client_secret = "sabskm9kuublu9a513026rt1i7jmqtvp85esgcb6ndj3j1514a6"
+    existing_domain = "autorescue-1760631013"
     
-    # Create new User Pool
-    pool_name = f"autorescue-pool-{int(time.time())}"
-    print(f"   🆔 Creating User Pool: {pool_name}")
+    print(f"   ✅ Using existing Cognito pool: {existing_user_pool_id}")
+    print(f"   🆔 Pool Name: autorescue-pool-1760631012")
+    print(f"   🌐 Domain: {existing_domain}.auth.{REGION}.amazoncognito.com")
     
+    oauth_config = {
+        "client_id": existing_client_id,
+        "client_secret": existing_client_secret,
+        "user_pool_id": existing_user_pool_id,
+        "domain": f"{existing_domain}.auth.{REGION}.amazoncognito.com",
+        "token_url": f"https://{existing_domain}.auth.{REGION}.amazoncognito.com/oauth2/token",
+        "scopes": ["autorescue-api/flights.read", "autorescue-api/flights.search", "autorescue-api/flights.price"]
+    }
+    
+    return oauth_config
+    
+    # Save configuration files for compatibility
     try:
-        pool_response = cognito_client.create_user_pool(
-            PoolName=pool_name,
-            Policies={
-                'PasswordPolicy': {
-                    'MinimumLength': 8,
-                    'RequireUppercase': False,
-                    'RequireLowercase': False,
-                    'RequireNumbers': False,
-                    'RequireSymbols': False
-                }
-            },
-            AutoVerifiedAttributes=['email']
-        )
-        
-        user_pool_id = pool_response['UserPool']['Id']
-        print(f"      ✅ User Pool created: {user_pool_id}")
-        
-        # Create User Pool Domain
-        domain_name = f"autorescue-{int(time.time())}"
-        cognito_client.create_user_pool_domain(
-            Domain=domain_name,
-            UserPoolId=user_pool_id
-        )
-        print(f"      ✅ Domain created: {domain_name}.auth.{REGION}.amazoncognito.com")
-        
-        # Create Resource Server with scopes
-        cognito_client.create_resource_server(
-            UserPoolId=user_pool_id,
-            Identifier='autorescue-api',
-            Name='AutoRescue API Resource Server',
-            Scopes=[
-                {'ScopeName': 'flights.read', 'ScopeDescription': 'Read flight information'},
-                {'ScopeName': 'flights.search', 'ScopeDescription': 'Search for flights'},
-                {'ScopeName': 'flights.price', 'ScopeDescription': 'Price flight offers'}
-            ]
-        )
-        print(f"      ✅ Resource Server created with scopes")
-        
-        # Create User Pool Client
-        client_response = cognito_client.create_user_pool_client(
-            UserPoolId=user_pool_id,
-            ClientName=f"{pool_name}-client",
-            GenerateSecret=True,
-            ExplicitAuthFlows=['ALLOW_ADMIN_USER_PASSWORD_AUTH', 'ALLOW_USER_PASSWORD_AUTH', 'ALLOW_REFRESH_TOKEN_AUTH'],
-            SupportedIdentityProviders=['COGNITO'],
-            AllowedOAuthFlows=['client_credentials'],
-            AllowedOAuthScopes=['autorescue-api/flights.read', 'autorescue-api/flights.search', 'autorescue-api/flights.price'],
-            AllowedOAuthFlowsUserPoolClient=True
-        )
-        
-        client_id = client_response['UserPoolClient']['ClientId']
-        client_secret = client_response['UserPoolClient']['ClientSecret']
-        print(f"      ✅ Client created: {client_id}")
-        
-        # Save configuration
-        oauth_config = {
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "user_pool_id": user_pool_id,
-            "domain": f"{domain_name}.auth.{REGION}.amazoncognito.com",
-            "token_url": f"https://{domain_name}.auth.{REGION}.amazoncognito.com/oauth2/token",
-            "scopes": ["autorescue-api/flights.read", "autorescue-api/flights.search", "autorescue-api/flights.price"]
-        }
-        
         with open('.cognito_oauth_config', 'w') as f:
             json.dump(oauth_config, f, indent=2)
         
         with open('.cognito_client_info', 'w') as f:
-            f.write(f"{client_id}\n{client_secret}")
+            f.write(f"{existing_client_id}\n{existing_client_secret}")
             
         with open('.cognito_user_pool_id', 'w') as f:
-            f.write(user_pool_id)
+            f.write(existing_user_pool_id)
+        
+        print(f"      ✅ Configuration files updated")
         
         return oauth_config
         
     except Exception as e:
-        print(f"   ❌ Failed to setup Cognito: {e}")
+        print(f"   ❌ Failed to save configuration: {e}")
         raise
 
 def create_gateway(client, role_arn, oauth_config):
