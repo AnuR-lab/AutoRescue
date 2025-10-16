@@ -1,8 +1,9 @@
 # AutoRescue Flight Pricing Workflow
 
-**Status**: ✅ Fully Implemented  
+**Status**: ✅ Fully Implemented & Deployed  
 **Date**: October 16, 2025  
-**Commit**: 691697b
+**Latest Commit**: b6f99ae  
+**Agent Deployed**: October 16, 2025 (CodeBuild #9)
 
 ---
 
@@ -256,13 +257,34 @@ uv run python scripts/test_agent_local.py
 ## Next Steps
 
 1. ✅ Search flights workflow - WORKING
-2. ✅ Price selected offer workflow - IMPLEMENTED
+2. ✅ Price selected offer workflow - IMPLEMENTED & DEPLOYED
 3. 🔄 Booking API integration - NEXT
 4. 🔄 Payment processing - FUTURE
 5. 🔄 Confirmation & ticketing - FUTURE
 
 ---
 
+## Deployment
+
+The agent is deployed via CodeBuild and can be updated using:
+
+```bash
+python3 scripts/deploy_agent_update.py
+```
+
+This script:
+- Packages the agent code
+- Uploads to S3
+- Triggers CodeBuild
+- Monitors deployment progress
+
+**Current Deployment**:
+- Build Number: #9
+- Deploy Date: October 16, 2025
+- Agent ARN: `arn:aws:bedrock-agentcore:us-east-1:905418267822:runtime/autorescue_agent-KyZlYU4Lgs`
+
+---
+
 **Deployment Date**: October 16, 2025  
 **Last Updated**: October 16, 2025  
-**Commit**: 691697b
+**Latest Commit**: b6f99ae
