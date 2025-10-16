@@ -45,3 +45,12 @@ secrets/
 *.swp
 *.swo
 *~
+
+# Cleanup and archives
+.archive/
+*.backup
+*.bak
+*.old
+
+# User pool ID (generated during deployment)
+.cognito_user_pool_id
