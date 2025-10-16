@@ -138,20 +138,36 @@ def price_flight_offer(flight_offer_data):
         logger.info(
             f"Pricing flight offer ID: {flight_offer_data.get('id', 'unknown')}"
         )
+        
+        # Log the actual request details
+        logger.info(f"[AMADEUS API REQUEST]")
+        logger.info(f"URL: {url}")
+        logger.info(f"Headers: {json.dumps({k: v for k, v in headers.items() if k != 'Authorization'})}")
+        logger.info(f"Authorization: Bearer {access_token[:20]}...")  # Only log first 20 chars of token
+        logger.info(f"Payload: {json.dumps(payload, indent=2)}")
 
         # Make the API request
         response = requests.post(url, headers=headers, json=payload, timeout=15)
+        
+        # Log response details
+        logger.info(f"[AMADEUS API RESPONSE]")
+        logger.info(f"Status Code: {response.status_code}")
+        logger.info(f"Response Headers: {dict(response.headers)}")
+        
         response.raise_for_status()
 
         pricing_data = response.json()
+        logger.info(f"Response Body: {json.dumps(pricing_data, indent=2)}")
 
         logger.info("Successfully priced flight offer")
         return pricing_data
 
     except requests.exceptions.RequestException as e:
         logger.error(f"Error calling Amadeus Pricing API: {str(e)}")
-        if hasattr(e.response, "text"):
-            logger.error(f"Response: {e.response.text}")
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response Status Code: {e.response.status_code}")
+            logger.error(f"Response Headers: {dict(e.response.headers)}")
+            logger.error(f"Response Body: {e.response.text}")
         raise
     except Exception as e:
         logger.error(f"Unexpected error in price_flight_offer: {str(e)}")
@@ -285,7 +301,7 @@ def lambda_handler(event, context):
         "body": { ... pricing details ... }
     }
     """
-    logger.info(f"Received event: {json.dumps(event)}")
+    logger.info(f"[LAMBDA INPUT] Received event: {json.dumps(event, indent=2)}")
 
     try:
         # Parse input
@@ -294,8 +310,23 @@ def lambda_handler(event, context):
         else:
             body = event.get("body", event)
 
-        # Extract flight offer
-        flight_offer = body.get("flight_offer")
+        logger.info(f"[LAMBDA INPUT] Parsed body: {json.dumps(body, indent=2)}")
+
+        # Check if it's a flight offer wrapped in "flight_offer" key or direct flight offer
+        if "flight_offer" in body:
+            # Legacy format with wrapper
+            flight_offer = body.get("flight_offer")
+            logger.info("[LAMBDA INPUT] Using legacy format with 'flight_offer' wrapper")
+        elif "type" in body or "id" in body:
+            # Direct flight offer object
+            flight_offer = body
+            logger.info("[LAMBDA INPUT] Using direct flight offer format")
+        else:
+            # Neither format found
+            flight_offer = None
+            logger.error("[LAMBDA INPUT] No valid flight offer format found")
+
+        logger.info(f"[LAMBDA INPUT] Final flight_offer: {json.dumps(flight_offer, indent=2) if flight_offer else 'None'}")
 
         if not flight_offer:
             return {
