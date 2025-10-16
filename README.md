@@ -33,12 +33,16 @@ See **[DEPLOY.md](DEPLOY.md)** for complete deployment instructions.
 # 1. Deploy Lambda functions
 ./scripts/deploy_lambdas.sh
 
-# 2. Create AgentCore Gateway
-python scripts/create_agentcore_gateway.py
+# 2. Update AgentCore runtime
+./scripts/update_agent.sh
+# Or: python scripts/update_agent.py
 
-# 3. Add Lambda targets via AWS Console
-# See DEPLOY.md Step 5 for details
+# 3. Test the agent
+cd agent_runtime
+uv run agentcore invoke '{"prompt": "Find flights from JFK to LAX on October 23, 2025"}'
 ```
+
+**For detailed script documentation, see [scripts/README.md](scripts/README.md)**
 
 ## 📋 Prerequisites
 
