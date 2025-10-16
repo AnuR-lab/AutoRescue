@@ -133,13 +133,9 @@ def call_agent_runtime(user_prompt: str) -> dict:
         return response_data
 
     except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        print(f"ERROR in call_agent_runtime: {error_details}")  # Log to console
         return {
             "error": str(e),
             "response": f"I apologize, but I encountered an error: {str(e)}",
-            "error_details": error_details
         }
 
 
@@ -293,10 +289,6 @@ def show_home_page():
                 if "error" in response_data:
                     error_msg = response_data.get("response", "An error occurred.")
                     st.error(error_msg)
-                    # Show detailed error in expander
-                    if "error_details" in response_data:
-                        with st.expander("Error Details"):
-                            st.code(response_data["error_details"])
                     response_text = error_msg
                 else:
                     response_text = response_data.get(
