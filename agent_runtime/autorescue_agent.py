@@ -33,7 +33,7 @@ GATEWAY_URL = os.getenv(
 )
 
 # Cognito Domain Configuration
-COGNITO_DOMAIN = os.getenv("COGNITO_DOMAIN", "autorescue-1760552868.auth.us-east-1.amazoncognito.com")
+COGNITO_DOMAIN = os.getenv("COGNITO_DOMAIN", "autorescue-1760631013.auth.us-east-1.amazoncognito.com")
 
 # Secrets cache
 _secrets_cache = {
@@ -76,7 +76,7 @@ def _get_cognito_credentials() -> Dict[str, str]:
 # Model Configuration
 MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
-    "us.anthropic.claude-sonnet-4-5-v1:0"
+    "anthropic.claude-3-5-sonnet-20241022-v2:0"
 )
 
 # Custom Tools
@@ -177,17 +177,45 @@ When a user wants to book a flight, follow this exact sequence:
 - Never make assumptions about dates, airports, or passenger counts
 - Always confirm important details with the user
 
+## Flight Selection and Pricing Workflow
+
+**IMPORTANT**: When a user expresses interest in booking or selecting a specific flight offer from search results:
+
+1. **Identify Selection**: Look for phrases like:
+   - "I want to book flight X"
+   - "Please select option 2"
+   - "I'll take the morning flight"
+   - "Book the cheapest option"
+   - "I want the [specific flight details]"
+
+2. **Extract Flight Offer**: From the previous search results, identify the complete flight offer object that matches the user's selection
+
+3. **Call offer-price___priceFlightOffer**: Automatically call this tool with the selected flight offer to get:
+   - Final pricing with all taxes and fees
+   - Booking conditions and requirements
+   - Seat availability confirmation
+   - Payment and ticketing deadlines
+
+4. **Present Results**: Show the user:
+   - Final total price (may differ from search price)
+   - All included services and fees
+   - Booking conditions
+   - Next steps for completing the booking
+
 ## Tool Usage
 
 You have access to these tools:
 - **search-flights___searchFlights**: Search for available flights
-- **offer-price___priceFlightOffer**: Get final pricing for a selected flight offer (validates availability)
-- **analyze-disruption___analyzeDisruption**: Analyze flight cancellations and find alternatives
+- **offer-price___priceFlightOffer**: Get final pricing for a selected flight offer (use when user selects a specific flight)
 - **current_time**: Get current date and time for reference
 
-IMPORTANT: When using priceFlightOffer, pass the entire flight_offer object exactly as received from searchFlights.
+**Flow Example**:
+1. User: "Find flights from JFK to LAX on 2025-11-01"
+2. Agent: Calls search-flights___searchFlights → Shows options
+3. User: "I want to book option 2"
+4. Agent: Calls offer-price___priceFlightOffer with the selected flight offer → Shows final pricing and booking details
 
-Use these tools to provide accurate, real-time flight information and validated pricing.
+Use these tools to provide accurate, real-time flight information and seamless booking assistance.
 """
 
 
@@ -271,6 +299,20 @@ class AutoRescueAgent:
         """
         try:
             logger.info(f"Processing query: {user_query[:100]}...")
+            
+            # Check if this looks like a flight selection query
+            selection_keywords = [
+                "book", "select", "choose", "i want", "i'll take", 
+                "option", "flight", "cheapest", "morning", "afternoon", 
+                "evening", "direct", "shortest", "fastest"
+            ]
+            
+            query_lower = user_query.lower()
+            is_selection_query = any(keyword in query_lower for keyword in selection_keywords)
+            
+            if is_selection_query:
+                logger.info("Detected potential flight selection query")
+            
             response = self.agent(user_query)
             result = response.message["content"][0]["text"]
             logger.info(f"Response generated: {len(result)} characters")
