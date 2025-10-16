@@ -1,0 +1,86 @@
+{
+  "tool": {
+    "name": "priceFlightOffer",
+    "description": "Get the final price and booking details for a selected flight offer. This validates the offer and provides accurate pricing including all taxes and fees. Use this after a user selects a flight from search results.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "flight_offer": {
+          "type": "object",
+          "description": "The complete flight offer object from search results that the user wants to price. This should include all itinerary, pricing, and traveler information.",
+          "required": true
+        }
+      },
+      "required": [
+        "flight_offer"
+      ]
+    }
+  },
+  "lambda": {
+    "functionName": "AutoRescueOfferPrice",
+    "qualifier": "$LATEST"
+  },
+  "examples": [
+    {
+      "description": "Price a selected flight offer",
+      "input": {
+        "flight_offer": {
+          "type": "flight-offer",
+          "id": "1",
+          "source": "GDS",
+          "itineraries": [
+            {
+              "segments": [
+                {
+                  "departure": {
+                    "iataCode": "JFK",
+                    "at": "2025-10-29T15:00:00"
+                  },
+                  "arrival": {
+                    "iataCode": "LAX",
+                    "at": "2025-10-29T18:30:00"
+                  },
+                  "carrierCode": "AA",
+                  "number": "123"
+                }
+              ]
+            }
+          ],
+          "price": {
+            "currency": "USD",
+            "total": "350.00"
+          },
+          "travelerPricings": [
+            {
+              "travelerId": "1",
+              "travelerType": "ADULT"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "usage_guidance": {
+    "when_to_use": [
+      "After user selects a specific flight from search results",
+      "Before proceeding to booking to get final accurate price",
+      "When user asks 'how much is this flight' or 'what's the final price'",
+      "To validate flight availability and pricing before booking"
+    ],
+    "workflow": [
+      "1. User searches for flights (use searchFlights tool)",
+      "2. Present flight options to user",
+      "3. User selects one flight",
+      "4. Use priceFlightOffer with the selected flight offer object",
+      "5. Present final pricing details to user",
+      "6. Proceed to booking if user confirms"
+    ],
+    "important_notes": [
+      "Always use the complete flight offer object from search results",
+      "Prices may change between search and pricing - this gives the current accurate price",
+      "Check 'instantTicketingRequired' in response - if true, booking must be completed quickly",
+      "Check 'numberOfBookableSeats' to confirm availability",
+      "Include all traveler information from the original search"
+    ]
+  }
+}

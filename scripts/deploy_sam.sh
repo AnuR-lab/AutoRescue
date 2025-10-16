@@ -87,7 +87,7 @@ else
     else
         pip install -q -r requirements.txt -t package/ --no-cache-dir
     fi
-    cp index.py package/
+    cp lambda_function.py package/
     cd package
     zip -qr ../deployment-package.zip .
     cd ..
@@ -95,9 +95,9 @@ else
     echo -e "${GREEN}  ✓ SearchFlights packaged${NC}"
     cd ../..
     
-    # Package AnalyzeDisruption
-    echo -e "${BLUE}  Packaging AnalyzeDisruption...${NC}"
-    cd lambda_functions/analyze_disruption
+    # Package OfferPrice
+    echo -e "${BLUE}  Packaging OfferPrice...${NC}"
+    cd lambda_functions/offer_price
     if [ -d package ]; then rm -rf package; fi
     mkdir package
     # Use UV or pip depending on availability
@@ -106,12 +106,12 @@ else
     else
         pip install -q -r requirements.txt -t package/ --no-cache-dir
     fi
-    cp index.py package/
+    cp lambda_function.py package/
     cd package
     zip -qr ../deployment-package.zip .
     cd ..
     rm -rf package
-    echo -e "${GREEN}  ✓ AnalyzeDisruption packaged${NC}"
+    echo -e "${GREEN}  ✓ OfferPrice packaged${NC}"
     cd ../..
     
     echo -e "${GREEN}✅ Packaging complete${NC}"
@@ -130,16 +130,16 @@ else
             --region "$REGION" > /dev/null
         echo -e "${GREEN}  ✓ SearchFlights updated${NC}"
         
-        echo -e "${BLUE}  Updating AnalyzeDisruption...${NC}"
+        echo -e "${BLUE}  Updating OfferPrice...${NC}"
         aws lambda update-function-code \
-            --function-name AutoRescue-AnalyzeDisruption \
-            --zip-file fileb://lambda_functions/analyze_disruption/deployment-package.zip \
+            --function-name AutoRescue-OfferPrice \
+            --zip-file fileb://lambda_functions/offer_price/deployment-package.zip \
             --region "$REGION" > /dev/null
-        echo -e "${GREEN}  ✓ AnalyzeDisruption updated${NC}"
+        echo -e "${GREEN}  ✓ OfferPrice updated${NC}"
         
         # Cleanup
         rm lambda_functions/search_flights/deployment-package.zip
-        rm lambda_functions/analyze_disruption/deployment-package.zip
+        rm lambda_functions/offer_price/deployment-package.zip
     else
         echo -e "${RED}❌ Stack doesn't exist. Please use SAM CLI or create stack first with CloudFormation template.${NC}"
         echo -e "${YELLOW}Install SAM CLI: brew install aws-sam-cli${NC}"
