@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: S3 bucket storing personal_info.json with encryption at rest (KMS) and enforced SSL for in-transit encryption.
+
+Parameters:
+  BucketName:
+    Type: String
+    Default: autorescue-personal-info
+    Description: Name of the S3 bucket to store personal_info.json
+  KmsKeyAlias:
+    Type: String
+    Default: alias/autorescue/personal-info
+    Description: Alias to create for the KMS key
+  PersonalInfoObjectKey:
+    Type: String
+    Default: personal_info.json
+    Description: Object key name for the uploaded personal info file
+  UploadPersonalInfo:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'false'
+    Description: If 'true', template expects a local file upload via separate script after stack creation.
+
+Mappings: {}
+
+Resources:
+  PersonalInfoKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting personal info bucket objects
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: Allow S3 Use Of The Key
+            Effect: Allow
+            Principal: '*'
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:ReEncrypt*
+              - kms:GenerateDataKey*
+              - kms:DescribeKey
+            Resource: '*'
+            Condition:
+              StringEquals:
+                kms:ViaService: !Sub s3.${AWS::Region}.amazonaws.com
+  PersonalInfoKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Ref KmsKeyAlias
+      TargetKeyId: !Ref PersonalInfoKey
+
+  PersonalInfoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref PersonalInfoKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: NonCurrentExpiration
+            Status: Enabled
+            NoncurrentVersionExpirationInDays: 365
+      # Access logging removed (was pointing to same bucket which S3 disallows). Add a separate logging bucket later if required.
+    DeletionPolicy: Retain
+
+  EnforceSSLBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PersonalInfoBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnforceSSLRequests
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !Sub '${PersonalInfoBucket.Arn}/*'
+              - !Sub '${PersonalInfoBucket.Arn}'
+            Condition:
+              Bool:
+                aws:SecureTransport: false
+          - Sid: AllowAccountRootListGetPutDelete
+            Effect: Allow
+            Principal:
+              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:ListBucket
+            Resource:
+              - !Sub '${PersonalInfoBucket.Arn}/*'
+              - !Sub '${PersonalInfoBucket.Arn}'
+
+Outputs:
+  BucketNameOutput:
+    Description: Created bucket name
+    Value: !Ref PersonalInfoBucket
+  KmsKeyId:
+    Description: KMS Key ID used for encryption
+    Value: !Ref PersonalInfoKey
