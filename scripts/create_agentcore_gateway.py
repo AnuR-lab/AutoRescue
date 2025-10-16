@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-AutoRescue AgentCore Gateway - Complete Setup
-Creates AgentCore Gateway with Lambda targets and Cognito OAuth2 authentication
+AutoRescue AgentCore Gateway - Create Gateway Only
+Creates the basic AgentCore Gateway with IAM role and Cognito OAuth2 authentication.
+Use add_gateway_targets.py to add Lambda targets after gateway creation.
 """
 import boto3
 import json
@@ -131,7 +132,7 @@ def setup_cognito_oauth():
             Scopes=[
                 {'ScopeName': 'flights.read', 'ScopeDescription': 'Read flight information'},
                 {'ScopeName': 'flights.search', 'ScopeDescription': 'Search for flights'},
-                {'ScopeName': 'disruptions.analyze', 'ScopeDescription': 'Analyze flight disruptions'}
+                {'ScopeName': 'flights.price', 'ScopeDescription': 'Price flight offers'}
             ]
         )
         print(f"      ✅ Resource Server created with scopes")
@@ -144,7 +145,7 @@ def setup_cognito_oauth():
             ExplicitAuthFlows=['ALLOW_ADMIN_USER_PASSWORD_AUTH', 'ALLOW_USER_PASSWORD_AUTH', 'ALLOW_REFRESH_TOKEN_AUTH'],
             SupportedIdentityProviders=['COGNITO'],
             AllowedOAuthFlows=['client_credentials'],
-            AllowedOAuthScopes=['autorescue-api/flights.read', 'autorescue-api/flights.search', 'autorescue-api/disruptions.analyze'],
+            AllowedOAuthScopes=['autorescue-api/flights.read', 'autorescue-api/flights.search', 'autorescue-api/flights.price'],
             AllowedOAuthFlowsUserPoolClient=True
         )
         
@@ -159,7 +160,7 @@ def setup_cognito_oauth():
             "user_pool_id": user_pool_id,
             "domain": f"{domain_name}.auth.{REGION}.amazoncognito.com",
             "token_url": f"https://{domain_name}.auth.{REGION}.amazoncognito.com/oauth2/token",
-            "scopes": ["autorescue-api/flights.read", "autorescue-api/flights.search", "autorescue-api/disruptions.analyze"]
+            "scopes": ["autorescue-api/flights.read", "autorescue-api/flights.search", "autorescue-api/flights.price"]
         }
         
         with open('.cognito_oauth_config', 'w') as f:
@@ -176,15 +177,6 @@ def setup_cognito_oauth():
     except Exception as e:
         print(f"   ❌ Failed to setup Cognito: {e}")
         raise
-
-def get_lambda_arn(lambda_client, function_name):
-    """Get Lambda function ARN"""
-    try:
-        response = lambda_client.get_function(FunctionName=function_name)
-        return response['Configuration']['FunctionArn']
-    except Exception as e:
-        print(f"   ❌ Lambda function {function_name} not found: {e}")
-        return None
 
 def create_gateway(client, role_arn, oauth_config):
     """Create the AgentCore Gateway with Cognito authentication"""
@@ -203,7 +195,7 @@ def create_gateway(client, role_arn, oauth_config):
     try:
         response = client.create_gateway(
             name=GATEWAY_NAME,
-            description="AutoRescue AgentCore Gateway with Lambda targets",
+            description="AutoRescue AgentCore Gateway for flight assistance",
             roleArn=role_arn,
             protocolType='MCP',
             authorizerType='CUSTOM_JWT',
@@ -241,6 +233,78 @@ def create_gateway(client, role_arn, oauth_config):
         import traceback
         traceback.print_exc()
         raise
+
+def main():
+    """Main function to create basic AutoRescue AgentCore Gateway"""
+    print("🚀 AutoRescue AgentCore Gateway - Gateway Creation")
+    print("=" * 60)
+    
+    try:
+        # Setup IAM role
+        role_arn = create_iam_role_if_needed()
+        
+        # Setup Cognito OAuth2
+        oauth_config = setup_cognito_oauth()
+        
+        # Setup AgentCore client
+        client = boto3.client('bedrock-agentcore-control', region_name=REGION)
+        
+        # Create gateway
+        print()
+        gateway_id = create_gateway(client, role_arn, oauth_config)
+        if not gateway_id:
+            return 1
+        
+        # Save basic gateway info
+        print()
+        gateway_info = {
+            "created": time.strftime('%Y-%m-%dT%H:%M:%S'),
+            "gateway": {
+                "id": gateway_id,
+                "name": GATEWAY_NAME,
+                "mcpUrl": f"https://{gateway_id}.gateway.bedrock-agentcore.{REGION}.amazonaws.com/mcp"
+            },
+            "oauth": {
+                "client_id": oauth_config['client_id'],
+                "user_pool_id": oauth_config['user_pool_id'],
+                "token_url": oauth_config['token_url'],
+                "scopes": oauth_config['scopes']
+            }
+        }
+        
+        with open('gateway_info.json', 'w') as f:
+            json.dump(gateway_info, f, indent=2)
+        
+        # Store in SSM
+        ssm = boto3.client('ssm', region_name=REGION)
+        ssm.put_parameter(
+            Name='/app/autorescue/agentcore/gateway_id',
+            Value=gateway_id,
+            Type='String',
+            Overwrite=True
+        )
+        
+        print("💾 Gateway info saved to gateway_info.json")
+        
+        print("\n" + "=" * 60)
+        print("🎉 SUCCESS! AutoRescue AgentCore Gateway is ready!")
+        print("=" * 60)
+        print(f"Gateway URL: {gateway_info['gateway']['mcpUrl']}")
+        print(f"Gateway ID: {gateway_id}")
+        print(f"Client ID: {oauth_config['client_id']}")
+        print(f"Token URL: {oauth_config['token_url']}")
+        print(f"Scopes: {', '.join(oauth_config['scopes'])}")
+        print("\n✅ Gateway configuration saved to gateway_info.json")
+        print("✅ OAuth config saved to .cognito_oauth_config")
+        print("\n🎯 NEXT STEP: Run ./scripts/add_gateway_targets.py to add Lambda targets")
+        
+        return 0
+        
+    except Exception as e:
+        print(f"\n❌ Setup failed: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
 
 def create_search_flights_target(client, gateway_id, lambda_arn):
     """Create the Search Flights Lambda target"""
@@ -320,6 +384,158 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
             gatewayIdentifier=gateway_id,
             name="search-flights-target",
             description="Search flights Lambda target",
+            targetConfiguration=target_config
+        )
+        
+        target_id = response['targetId']
+        print(f"   ✅ Target created: {target_id}")
+        
+        # Wait for target to be ready
+        print(f"   ⏳ Waiting for target to be ready...")
+        for i in range(12):
+            try:
+                status_response = client.get_gateway_target(
+                    gatewayIdentifier=gateway_id,
+                    targetId=target_id
+                )
+                status = status_response.get('status', 'UNKNOWN')
+                
+                if status == 'READY':
+                    print(f"   ✅ Target is ready!")
+                    break
+                elif status == 'FAILED':
+                    print(f"   ❌ Target failed!")
+                    failure_reason = status_response.get('failureReasons', ['Unknown'])
+                    print(f"   ❌ Failure reason: {failure_reason}")
+                    break
+                else:
+                    print(f"   ⏳ Status: {status} (attempt {i+1}/12)")
+                    time.sleep(10)
+            except Exception as check_error:
+                print(f"   ⏳ Checking status... (attempt {i+1}/12): {check_error}")
+                time.sleep(10)
+        
+        return target_id
+        
+    except Exception as e:
+        print(f"   ❌ Failed to create target: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
+
+def create_offer_price_target(client, gateway_id, lambda_arn):
+    """Create the Offer Price Lambda target"""
+    print("🎯 Creating Offer Price target...")
+    
+    # OpenAPI spec for offer price - based on Amadeus Flight Offers Pricing API specification
+    openapi_spec = {
+        "openapi": "3.0.0",
+        "info": {
+            "title": "Flight Offer Price API",
+            "version": "1.0.0",
+            "description": "Get final price and booking details for a selected flight offer"
+        },
+        "paths": {
+            "/price-flight-offer": {
+                "post": {
+                    "summary": "Price flight offer",
+                    "description": "Get the final price and booking details for a selected flight offer. This validates the offer and provides accurate pricing including all taxes and fees.",
+                    "operationId": "priceFlightOffer",
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "required": ["flight_offer"],
+                                    "properties": {
+                                        "flight_offer": {
+                                            "type": "object",
+                                            "description": "The complete flight offer object from search results that the user wants to price. This should include all itinerary, pricing, and traveler information.",
+                                            "properties": {
+                                                "type": {
+                                                    "type": "string",
+                                                    "description": "Type of the offer",
+                                                    "example": "flight-offer"
+                                                },
+                                                "id": {
+                                                    "type": "string",
+                                                    "description": "Unique identifier for the flight offer",
+                                                    "example": "1"
+                                                },
+                                                "source": {
+                                                    "type": "string",
+                                                    "description": "Source of the flight offer",
+                                                    "example": "GDS"
+                                                },
+                                                "itineraries": {
+                                                    "type": "array",
+                                                    "description": "Flight itinerary details"
+                                                },
+                                                "price": {
+                                                    "type": "object",
+                                                    "description": "Price information"
+                                                },
+                                                "travelerPricings": {
+                                                    "type": "array",
+                                                    "description": "Traveler pricing details"
+                                                }
+                                            },
+                                            "required": ["type", "id"]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Successful price retrieval with final pricing details",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "pricing": {
+                                                "type": "object",
+                                                "description": "Detailed pricing information"
+                                            },
+                                            "booking_info": {
+                                                "type": "object",
+                                                "description": "Booking requirements and details"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid flight offer data"
+                        },
+                        "500": {
+                            "description": "Failed to price flight offer"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Create target configuration for Lambda
+    target_config = {
+        "mcp": {
+            "openApiSchema": {
+                "inlinePayload": json.dumps(openapi_spec)
+            },
+            "lambdaArn": lambda_arn
+        }
+    }
+    
+    try:
+        response = client.create_gateway_target(
+            gatewayIdentifier=gateway_id,
+            name="offer-price-target",
+            description="Price flight offer Lambda target",
             targetConfiguration=target_config
         )
         
@@ -510,90 +726,6 @@ def save_gateway_info(gateway_id, targets, oauth_config, lambda_arns):
     
     print("   ✅ Gateway info saved to gateway_info.json")
     return gateway_info
-
-def main():
-    """Main function to create complete AutoRescue AgentCore Gateway"""
-    print("🚀 AutoRescue AgentCore Gateway - Complete Setup")
-    print("=" * 60)
-    
-    try:
-        # Setup IAM role
-        role_arn = create_iam_role_if_needed()
-        
-        # Setup Cognito OAuth2
-        oauth_config = setup_cognito_oauth()
-        
-        # Setup AgentCore client
-        client = boto3.client('bedrock-agentcore-control', region_name=REGION)
-        
-        # Get Lambda ARNs
-        lambda_client = boto3.client('lambda', region_name=REGION)
-        
-        print("\n📋 Checking Lambda functions...")
-        search_flights_arn = get_lambda_arn(lambda_client, 'AutoRescue-SearchFlights')
-        analyze_disruption_arn = get_lambda_arn(lambda_client, 'AutoRescue-AnalyzeDisruption')
-        
-        if not search_flights_arn or not analyze_disruption_arn:
-            print("\n❌ Lambda functions not found! Please deploy them first:")
-            print("   Run: ./scripts/deploy_lambdas.sh")
-            return 1
-        
-        print(f"   ✅ SearchFlights: {search_flights_arn}")
-        print(f"   ✅ AnalyzeDisruption: {analyze_disruption_arn}")
-        
-        lambda_arns = {
-            'search_flights': search_flights_arn,
-            'analyze_disruption': analyze_disruption_arn
-        }
-        
-        # Create gateway
-        print()
-        gateway_id = create_gateway(client, role_arn, oauth_config)
-        if not gateway_id:
-            return 1
-        
-        # Create targets
-        print()
-        search_target_id = create_search_flights_target(client, gateway_id, search_flights_arn)
-        
-        print()
-        disruption_target_id = create_analyze_disruption_target(client, gateway_id, analyze_disruption_arn)
-        
-        targets = {
-            'search_flights': {
-                'id': search_target_id,
-                'name': 'search-flights-target',
-                'lambda_arn': search_flights_arn
-            },
-            'analyze_disruption': {
-                'id': disruption_target_id,
-                'name': 'analyze-disruption-target',
-                'lambda_arn': analyze_disruption_arn
-            }
-        }
-        
-        # Save info
-        print()
-        gateway_info = save_gateway_info(gateway_id, targets, oauth_config, lambda_arns)
-        
-        print("\n" + "=" * 60)
-        print("🎉 SUCCESS! AutoRescue AgentCore Gateway is ready!")
-        print("=" * 60)
-        print(f"Gateway URL: {gateway_info['gateway']['mcpUrl']}")
-        print(f"Gateway ID: {gateway_id}")
-        print(f"Client ID: {oauth_config['client_id']}")
-        print(f"Token URL: {oauth_config['token_url']}")
-        print(f"Scopes: {', '.join(oauth_config['scopes'])}")
-        print("\n✅ Gateway configuration saved to gateway_info.json")
-        print("✅ OAuth config saved to .cognito_oauth_config")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"\n❌ Setup failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
 
 if __name__ == "__main__":
     sys.exit(main())

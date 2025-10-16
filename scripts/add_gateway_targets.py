@@ -163,11 +163,12 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
             response = client.list_gateway_targets(gatewayIdentifier=gateway_id)
             for target in response.get('targets', []):
                 if target.get('name') == 'search-flights':
-                    print(f"   ✅ Using existing target: {target.get('id')}")
-                    return target.get('id')
+                    target_id = target.get('id')
+                    print(f"   ✅ Using existing target: {target_id}")
+                    return target_id
         except:
             pass
-        return None
+        return "EXISTING"  # Special value to indicate target exists
         
     except Exception as e:
         print(f"   ❌ Failed to create target: {e}")
@@ -175,12 +176,12 @@ def create_search_flights_target(client, gateway_id, lambda_arn):
         traceback.print_exc()
         return None
 
-def create_analyze_disruption_target(client, gateway_id, lambda_arn):
-    """Create the Analyze Disruption Lambda target"""
-    print("\n🎯 Creating Analyze Disruption target...")
+def create_offer_price_target(client, gateway_id, lambda_arn):
+    """Create the Offer Price Lambda target"""
+    print("\n🎯 Creating Offer Price target...")
     
     # Load MCP tool definition from JSON file
-    mcp_tool = load_mcp_tool('analyze_disruption')
+    mcp_tool = load_mcp_tool('offer_price')
     
     # Create target configuration for Lambda
     # toolSchema.inlinePayload expects an array of MCP tool definitions
@@ -206,8 +207,8 @@ def create_analyze_disruption_target(client, gateway_id, lambda_arn):
     try:
         response = client.create_gateway_target(
             gatewayIdentifier=gateway_id,
-            name="analyze-disruption",
-            description="Analyze disruption Lambda target",
+            name="offer-price",
+            description="Price flight offer Lambda target",
             targetConfiguration=target_config,
             credentialProviderConfigurations=credential_configs
         )
@@ -243,17 +244,18 @@ def create_analyze_disruption_target(client, gateway_id, lambda_arn):
         return target_id
         
     except client.exceptions.ConflictException:
-        print(f"   ⚠️ Target 'analyze-disruption' already exists")
+        print(f"   ⚠️ Target 'offer-price' already exists")
         # Try to get existing target
         try:
             response = client.list_gateway_targets(gatewayIdentifier=gateway_id)
             for target in response.get('targets', []):
-                if target.get('name') == 'analyze-disruption':
-                    print(f"   ✅ Using existing target: {target.get('id')}")
-                    return target.get('id')
+                if target.get('name') == 'offer-price':
+                    target_id = target.get('id')
+                    print(f"   ✅ Using existing target: {target_id}")
+                    return target_id
         except:
             pass
-        return None
+        return "EXISTING"  # Special value to indicate target exists
         
     except Exception as e:
         print(f"   ❌ Failed to create target: {e}")
@@ -278,32 +280,39 @@ def main():
         # Get Lambda ARNs
         print("\n📋 Checking Lambda functions...")
         search_flights_arn = get_lambda_arn(lambda_client, 'AutoRescue-SearchFlights')
-        analyze_disruption_arn = get_lambda_arn(lambda_client, 'AutoRescue-AnalyzeDisruption')
+        offer_price_arn = get_lambda_arn(lambda_client, 'AutoRescue-OfferPrice')
         
-        if not search_flights_arn or not analyze_disruption_arn:
+        if not search_flights_arn or not offer_price_arn:
             print("\n❌ Lambda functions not found! Please deploy them first:")
-            print("   Run: ./scripts/deploy_lambdas.sh")
+            print("   Run: ./scripts/deploy_sam.sh")
             return 1
         
         print(f"   ✅ SearchFlights: {search_flights_arn}")
-        print(f"   ✅ AnalyzeDisruption: {analyze_disruption_arn}")
+        print(f"   ✅ OfferPrice: {offer_price_arn}")
         
         # Create targets with inline IAM role credential configuration
         search_target_id = create_search_flights_target(client, GATEWAY_ID, search_flights_arn)
-        disruption_target_id = create_analyze_disruption_target(client, GATEWAY_ID, analyze_disruption_arn)
+        offer_price_target_id = create_offer_price_target(client, GATEWAY_ID, offer_price_arn)
         
         # Summary
         print("\n" + "=" * 60)
-        if search_target_id and disruption_target_id:
-            print("🎉 SUCCESS! Both targets added to gateway")
+        # If targets exist or were created, consider it success
+        search_ok = search_target_id is not None and search_target_id != False
+        price_ok = offer_price_target_id is not None and offer_price_target_id != False
+        
+        if search_ok and price_ok:
+            print("🎉 SUCCESS! Both targets are available in gateway")
             print("=" * 60)
             print(f"Gateway ID: {GATEWAY_ID}")
-            print(f"Search Flights Target: {search_target_id}")
-            print(f"Analyze Disruption Target: {disruption_target_id}")
+            print(f"Search Flights Target: {search_target_id if search_target_id != 'EXISTING' else 'existing'}")
+            print(f"Offer Price Target: {offer_price_target_id if offer_price_target_id != 'EXISTING' else 'existing'}")
             print("\n✅ Your AutoRescue gateway is ready to use!")
+            print(f"Gateway URL: https://{GATEWAY_ID}.gateway.bedrock-agentcore.{REGION}.amazonaws.com/mcp")
             return 0
         else:
-            print("⚠️ PARTIAL SUCCESS - Some targets may have failed")
+            print("⚠️ Some targets may have failed to create")
+            print(f"   Search Flights: {search_target_id}")
+            print(f"   Offer Price: {offer_price_target_id}")
             print("=" * 60)
             return 1
         
