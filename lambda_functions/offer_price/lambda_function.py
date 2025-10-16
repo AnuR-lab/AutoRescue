@@ -109,7 +109,9 @@ def price_flight_offer(flight_offer_data):
     Price a flight offer using Amadeus Flight Offers Pricing API
 
     Args:
-        flight_offer_data: The flight offer object to price (from search results)
+        flight_offer_data: The complete flight offer object to price (from search results)
+                          MUST include all mandatory fields: travelerPricings, segment IDs, 
+                          validatingAirlineCodes
 
     Returns:
         dict: Pricing details with final price, taxes, fees, and booking information
@@ -126,6 +128,19 @@ def price_flight_offer(flight_offer_data):
             "Content-Type": "application/json",
             "X-HTTP-Method-Override": "GET",
         }
+
+        # Validate mandatory fields
+        if not flight_offer_data.get("travelerPricings"):
+            raise ValueError("Missing required field: travelerPricings. The complete flight offer object must be provided.")
+        
+        if not flight_offer_data.get("validatingAirlineCodes"):
+            raise ValueError("Missing required field: validatingAirlineCodes. The complete flight offer object must be provided.")
+        
+        # Check for segment IDs
+        for itinerary in flight_offer_data.get("itineraries", []):
+            for segment in itinerary.get("segments", []):
+                if "id" not in segment:
+                    raise ValueError("Missing required field: segment ID. The complete flight offer object with all segment IDs must be provided.")
 
         # Prepare the pricing request payload
         payload = {

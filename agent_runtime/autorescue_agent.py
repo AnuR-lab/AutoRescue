@@ -76,7 +76,7 @@ def _get_cognito_credentials() -> Dict[str, str]:
 # Model Configuration
 MODEL_ID = os.getenv(
     "BEDROCK_MODEL_ID",
-    "anthropic.claude-3-5-sonnet-20241022-v2:0"
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
 )
 
 # Custom Tools
@@ -188,13 +188,28 @@ When a user wants to book a flight, follow this exact sequence:
    - "Book the cheapest option"
    - "I want the [specific flight details]"
 
-2. **Extract Flight Offer**: From the previous search results, identify the complete flight offer object that matches the user's selection
+2. **Extract Flight Offer**: From the previous search results, identify the flight that matches the user's selection.
+   - Each flight in search results has two parts:
+     * "summary": Human-readable info (carrier, times, price, stops)
+     * "amadeus_offer": Complete Amadeus flight offer object
+   - Use the "summary" to understand which flight the user wants
+   - Use the "amadeus_offer" for the pricing API call
 
-3. **Call offer-price___priceFlightOffer**: Automatically call this tool with the selected flight offer to get:
+3. **Call offer-price___priceFlightOffer**: Automatically call this tool with the complete Amadeus offer to get:
    - Final pricing with all taxes and fees
    - Booking conditions and requirements
    - Seat availability confirmation
    - Payment and ticketing deadlines
+   
+   **CRITICAL**: Pass the ENTIRE "amadeus_offer" object from the selected flight. 
+   Do NOT use the "summary" object for pricing - it's only for display.
+   The "amadeus_offer" includes all required fields:
+   - type, id, source, instantTicketingRequired, nonHomogeneous, oneWay
+   - lastTicketingDate, numberOfBookableSeats
+   - itineraries (complete with all segments and their IDs)
+   - price (with currency, total, base, fees, grandTotal)
+   - pricingOptions, validatingAirlineCodes
+   - travelerPricings (complete array with all fare details)
 
 4. **Present Results**: Show the user:
    - Final total price (may differ from search price)

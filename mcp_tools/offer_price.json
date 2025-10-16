@@ -1,39 +1,143 @@
 {
   "name": "priceFlightOffer",
-  "description": "Get the final price and booking details for a selected flight offer. This validates the offer and provides accurate pricing including all taxes and fees. Use this after a user selects a flight from search results.",
+  "description": "Get accurate final pricing for a flight offer before booking. This validates the offer and returns up-to-date prices with taxes, fees, and booking conditions. CRITICAL: You MUST pass the complete flight offer object exactly as returned from searchFlights API - do not simplify or extract fields.",
   "inputSchema": {
     "type": "object",
     "properties": {
       "flight_offer": {
         "type": "object",
-        "description": "The complete flight offer object from search results that the user wants to price. This should include all itinerary, pricing, and traveler information.",
+        "description": "The complete FlightOffer object from Amadeus Flight Offers Search API response. Pass the entire 'data[i]' element from search results without any modifications. This object includes all required fields per Amadeus Flight Offers Price API specification.",
+        "required": [
+          "type",
+          "id",
+          "source",
+          "itineraries",
+          "price",
+          "pricingOptions",
+          "validatingAirlineCodes",
+          "travelerPricings"
+        ],
         "properties": {
           "type": {
             "type": "string",
-            "description": "Type of the offer"
+            "description": "Must be 'flight-offer'",
+            "enum": ["flight-offer"]
           },
           "id": {
-            "type": "string", 
-            "description": "Unique identifier for the flight offer"
+            "type": "string",
+            "description": "Unique identifier of the flight offer"
           },
           "source": {
             "type": "string",
-            "description": "Source of the flight offer"
+            "description": "Source of the offer (e.g., 'GDS')"
+          },
+          "instantTicketingRequired": {
+            "type": "boolean"
+          },
+          "nonHomogeneous": {
+            "type": "boolean"
+          },
+          "oneWay": {
+            "type": "boolean"
+          },
+          "lastTicketingDate": {
+            "type": "string"
+          },
+          "numberOfBookableSeats": {
+            "type": "number"
           },
           "itineraries": {
             "type": "array",
-            "description": "Flight itinerary details"
+            "description": "Complete itinerary array with all segments including segment IDs",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "duration": {
+                  "type": "string"
+                },
+                "segments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["id"],
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "REQUIRED: Segment ID referenced in travelerPricings.fareDetailsBySegment"
+                      },
+                      "departure": {
+                        "type": "object"
+                      },
+                      "arrival": {
+                        "type": "object"
+                      },
+                      "carrierCode": {
+                        "type": "string"
+                      },
+                      "number": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "price": {
             "type": "object",
-            "description": "Price information"
+            "description": "Price information from search results"
+          },
+          "pricingOptions": {
+            "type": "object"
+          },
+          "validatingAirlineCodes": {
+            "type": "array",
+            "description": "REQUIRED: Array of airline codes (1-9 items)",
+            "minItems": 1,
+            "maxItems": 9,
+            "items": {
+              "type": "string"
+            }
           },
           "travelerPricings": {
             "type": "array",
-            "description": "Traveler pricing details"
+            "description": "REQUIRED: Traveler pricing details (1-18 travelers). Each element must contain travelerId, fareOption, travelerType, price, and fareDetailsBySegment with segmentId matching segment IDs in itineraries.",
+            "minItems": 1,
+            "maxItems": 18,
+            "items": {
+              "type": "object",
+              "required": ["travelerId", "fareOption", "travelerType", "fareDetailsBySegment"],
+              "properties": {
+                "travelerId": {
+                  "type": "string"
+                },
+                "fareOption": {
+                  "type": "string"
+                },
+                "travelerType": {
+                  "type": "string"
+                },
+                "price": {
+                  "type": "object"
+                },
+                "fareDetailsBySegment": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["segmentId"],
+                    "properties": {
+                      "segmentId": {
+                        "type": "string",
+                        "description": "Must match a segment ID from itineraries"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
-        },
-        "required": ["type", "id"]
+        }
       }
     },
     "required": ["flight_offer"]

@@ -278,7 +278,7 @@ def lambda_handler(event, context):
     """
     # Enhanced logging
     print(f"[ANALYZE_DISRUPTION] ===== NEW REQUEST =====")
-    print(f"[ANALYZE_DISRUPTION] Request ID: {context.request_id}")
+    print(f"[ANALYZE_DISRUPTION] Request ID: {context.aws_request_id}")
     print(f"[ANALYZE_DISRUPTION] Function ARN: {context.invoked_function_arn}")
     print(f"[ANALYZE_DISRUPTION] Received event: {json.dumps(event)}")
     

@@ -16,7 +16,7 @@ User Input
 AWS Bedrock AgentCore Runtime (Docker Container)
     ↓
 AutoRescue Agent (Strands)
-    ├── Bedrock Model (Claude 3.5 Sonnet v2)
+    ├── Bedrock Model (Claude Sonnet 4.5)
     ├── MCP Gateway Client (OAuth2)
     │   ├── search-flights tool
     │   └── analyze-disruption tool
@@ -30,7 +30,7 @@ AutoRescue Agent (Strands)
 
 **Key Features:**
 - Built with `strands-agents` framework
-- Uses `BedrockModel` for Claude 3.5 Sonnet v2
+- Uses `BedrockModel` for Claude Sonnet 4.5
 - Connects to AgentCore Gateway via MCP protocol
 - OAuth2 authentication with Cognito
 - Professional system prompt for flight assistance
@@ -43,7 +43,7 @@ AutoRescue Agent (Strands)
 **Environment Variables:**
 - `GATEWAY_URL`: AgentCore Gateway MCP endpoint
 - `ACCESS_TOKEN`: OAuth2 bearer token from Cognito
-- `BEDROCK_MODEL_ID`: Bedrock model to use (default: claude-3-5-sonnet-v2)
+- `BEDROCK_MODEL_ID`: Bedrock model to use (default: claude-sonnet-4-5-20250929-v1:0)
 
 ### 2. Dockerfile
 
@@ -139,7 +139,7 @@ After running the deployment script, create the AgentCore Runtime:
    ```
    GATEWAY_URL=https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp
    ACCESS_TOKEN=<Get from Cognito OAuth2>
-   BEDROCK_MODEL_ID=us.anthropic.claude-3-5-sonnet-20241022-v2:0
+   BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0
    ```
 
 5. Click **Create**
@@ -156,7 +156,7 @@ aws bedrock-agentcore-control create-runtime \
   --environment-variables \
     GATEWAY_URL=https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp \
     ACCESS_TOKEN=<token> \
-    BEDROCK_MODEL_ID=us.anthropic.claude-3-5-sonnet-20241022-v2:0 \
+    BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-5-20250929-v1:0 \
   --region us-east-1
 ```
 
@@ -185,7 +185,7 @@ print(json.loads(response['body'].read()))
 ```json
 {
   "response": "I found 3 available flights from JFK to LAX on November 15, 2025:\n\n1. JetBlue B6 623\n   - Departs: 9:00 AM\n   - Arrives: 12:19 PM\n   - Duration: 6h 19m\n   - Price: $123.44 USD\n\n2. JetBlue B6 323\n   - Departs: 10:00 AM\n   - Arrives: 1:19 PM\n   - Duration: 6h 19m\n   - Price: $123.44 USD\n\n3. JetBlue B6 723\n   - Departs: 2:00 PM\n   - Arrives: 5:19 PM\n   - Duration: 6h 19m\n   - Price: $123.44 USD\n\nWould you like to book one of these flights?",
-  "model": "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+  "model": "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
   "gateway": "https://autorescue-gateway-7ildpiqiqm.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp"
 }
 ```
@@ -222,7 +222,7 @@ requests==2.32.5     # HTTP client
 - **Scopes**: `autorescue-api/flights.read`, `flights.search`, `disruptions.analyze`
 
 ### Model Configuration
-- **Default Model**: `us.anthropic.claude-3-5-sonnet-20241022-v2:0`
+- **Default Model**: `us.anthropic.claude-sonnet-4-5-20250929-v1:0`
 - **Region**: `us-east-1`
 
 ## Troubleshooting

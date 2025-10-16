@@ -105,7 +105,7 @@ def main():
     # Initialize agent
     print("\n🚀 Initializing AutoRescue Agent...")
     print(f"   Gateway: {GATEWAY_URL}")
-    print(f"   Model: us.anthropic.claude-3-5-sonnet-20241022-v2:0")
+    print(f"   Model: us.anthropic.claude-sonnet-4-5-20250929-v1:0")
     
     try:
         agent = AutoRescueAgent(bearer_token=access_token)

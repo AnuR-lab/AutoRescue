@@ -365,7 +365,7 @@ agentcore test autorescue-flight-assistant -p "Find flights from JFK to LAX for 
 
 ## 💰 Cost Estimation
 
-- **Claude 3.5 Sonnet**: ~$3/$15 per 1M tokens (input/output)
+- **Claude Sonnet 4.5**: ~$3/$15 per 1M tokens (input/output)
 - **Lambda Invocations**: First 1M free, then $0.20 per 1M
 - **Cognito**: 50,000 MAUs free tier
 - **SSM Parameters**: Standard parameters are free
@@ -428,7 +428,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 👏 Acknowledgments
 
 - AWS Bedrock Team for AgentCore framework
-- Anthropic for Claude 3.5 Sonnet
+- Anthropic for Claude Sonnet 4.5
 - Amadeus for flight data API
 - AWS Labs for AgentCore samples
 

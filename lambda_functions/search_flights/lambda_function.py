@@ -143,50 +143,57 @@ def search_flights(
                 "flights": []
             }
         
-        # Extract and format flight offers
-        flights = []
-        for offer in data['data'][:max_results]:
-            flight_info = {
-                "id": offer['id'],
-                "price": {
-                    "total": offer['price']['total'],
-                    "currency": offer['price']['currency']
+        # Process flight offers
+        # CRITICAL: We need BOTH the complete Amadeus objects AND user-friendly summaries
+        # - Complete objects are required for the pricing API (with all mandatory fields)
+        # - Summaries help the agent and user understand and select flights
+        
+        flights_with_summaries = []
+        
+        for idx, offer in enumerate(data['data'][:max_results], 1):
+            # Extract user-friendly information for display
+            itinerary = offer['itineraries'][0]  # Outbound flight
+            first_segment = itinerary['segments'][0]
+            last_segment = itinerary['segments'][-1]
+            
+            # Calculate total duration and stops
+            duration = itinerary.get('duration', 'N/A')
+            stops = len(itinerary['segments']) - 1
+            
+            # Get carrier information
+            carrier_code = first_segment['carrierCode']
+            
+            # Get price
+            price = offer['price']['total']
+            currency = offer['price']['currency']
+            
+            # Create combined object with summary + complete Amadeus data
+            flight_with_summary = {
+                # User-friendly summary for display and selection
+                "option_number": idx,
+                "summary": {
+                    "carrier": carrier_code,
+                    "departure_time": first_segment['departure']['at'],
+                    "arrival_time": last_segment['arrival']['at'],
+                    "duration": duration,
+                    "stops": stops,
+                    "price": f"{price} {currency}",
+                    "price_numeric": float(price)
                 },
-                "itineraries": []
+                # Complete Amadeus flight offer object (REQUIRED for pricing API)
+                "amadeus_offer": offer
             }
             
-            for itinerary in offer['itineraries']:
-                segments = []
-                for segment in itinerary['segments']:
-                    segments.append({
-                        "departure": {
-                            "iataCode": segment['departure']['iataCode'],
-                            "at": segment['departure']['at']
-                        },
-                        "arrival": {
-                            "iataCode": segment['arrival']['iataCode'],
-                            "at": segment['arrival']['at']
-                        },
-                        "carrierCode": segment['carrierCode'],
-                        "number": segment['number'],
-                        "duration": segment['duration']
-                    })
-                
-                flight_info['itineraries'].append({
-                    "duration": itinerary['duration'],
-                    "segments": segments
-                })
-            
-            flights.append(flight_info)
+            flights_with_summaries.append(flight_with_summary)
         
         return {
             "success": True,
-            "message": f"Found {len(flights)} flights from {origin} to {destination}",
-            "flight_count": len(flights),
+            "message": f"Found {len(flights_with_summaries)} flights from {origin} to {destination}",
+            "flight_count": len(flights_with_summaries),
             "origin": origin.upper(),
             "destination": destination.upper(),
             "departure_date": departure_date,
-            "flights": flights
+            "flights": flights_with_summaries  # Each flight has summary + complete Amadeus offer
         }
         
     except requests.exceptions.HTTPError as e:
@@ -211,8 +218,6 @@ def lambda_handler(event, context):
     """
     # Enhanced logging
     print(f"[SEARCH_FLIGHTS] ===== NEW REQUEST =====")
-    print(f"[SEARCH_FLIGHTS] Request ID: {context.request_id}")
-    print(f"[SEARCH_FLIGHTS] Function ARN: {context.invoked_function_arn}")
     print(f"[SEARCH_FLIGHTS] Received event: {json.dumps(event)}")
     
     try:

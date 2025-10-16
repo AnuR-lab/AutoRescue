@@ -32,7 +32,7 @@ agent = Agent(
     
     The tools call external AWS Lambda functions that fetch real-time flight data from Amadeus API.
     Tools are invoked through AgentCore Gateway with OAuth 2.0 authentication.""",
-    model="us.anthropic.claude-3-5-sonnet-20241022-v2:0",  # Bedrock model ID
+    model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",  # Bedrock model ID - Claude Sonnet 4.5
     # Tools are registered externally via AgentCore Gateway
     # The gateway routes tool calls to Lambda functions
 )
