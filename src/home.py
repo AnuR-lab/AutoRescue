@@ -336,7 +336,7 @@ def show_home_page():
                 
                 # Formulate a disruption handling prompt with locked parameters
                 prompt = (
-                    f"IMPORTANT: The passenger's cancelled flight had these FIXED parameters that CANNOT be changed:\n"
+                    f"IMPORTANT: The passenger's cancelled flight has these FIXED parameters that CANNOT be changed:\n"
                     f"- Origin: {origin} (LOCKED)\n"
                     f"- Destination: {destination} (LOCKED)\n"
                     f"- Airline: {airline} (LOCKED)\n\n"
