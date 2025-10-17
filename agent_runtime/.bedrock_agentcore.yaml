@@ -23,7 +23,7 @@ agents:
     bedrock_agentcore:
       agent_id: autorescue_agent-KyZlYU4Lgs
       agent_arn: arn:aws:bedrock-agentcore:us-east-1:905418267822:runtime/autorescue_agent-KyZlYU4Lgs
-      agent_session_id: abb8a45b-7a74-48b1-95b6-cdc792880b59
+      agent_session_id: null
     codebuild:
       project_name: bedrock-agentcore-autorescue_agent-builder
       execution_role: arn:aws:iam::905418267822:role/AmazonBedrockAgentCoreSDKCodeBuild-us-east-1-c76824e496

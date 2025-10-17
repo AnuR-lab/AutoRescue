@@ -90,14 +90,26 @@ def current_time() -> str:
 @tool
 def random_flight_suggestion() -> dict:
     """Generate a random flight search suggestion.
-    Returns a dict with origin (North America), destination (Europe), airline (AA, BA, DL, LA, AF), and departure_date within next 14 days.
+    Returns a dict with origin and destination (popular US domestic routes with daily service), airline, and departure_date within next 14 days.
     """
-    north_america_airports = ["JFK", "EWR", "LAX", "ORD", "DFW", "MIA", "ATL", "YYZ", "YUL", "SEA"]
-    europe_airports = ["LHR", "LGW", "CDG", "AMS", "FRA", "MAD", "BCN", "MUC", "DUB", "CPH"]
-    airlines = ["AA", "BA", "DL", "LA", "AF"]
-    origin = choice(north_america_airports)
-    destination = choice(europe_airports)
-    airline = choice(airlines)
+    # Popular US domestic trunk routes with high frequency and availability
+    # Each route paired with carriers that actually operate it
+    popular_routes = [
+        ("JFK", "LAX", ["AA", "DL", "B6"]),      # New York - Los Angeles
+        ("EWR", "SFO", ["UA", "DL"]),            # Newark - San Francisco
+        ("ORD", "LAX", ["AA", "UA"]),            # Chicago - Los Angeles
+        ("DFW", "LAX", ["AA"]),                   # Dallas - Los Angeles
+        ("ATL", "LAX", ["DL"]),                   # Atlanta - Los Angeles
+        ("BOS", "LAX", ["DL", "B6", "AA"]),      # Boston - Los Angeles
+        ("JFK", "SFO", ["B6", "UA", "DL"]),      # New York - San Francisco
+        ("MIA", "LAX", ["AA"]),                   # Miami - Los Angeles
+        ("SEA", "JFK", ["DL", "AS"]),            # Seattle - New York
+        ("DEN", "JFK", ["UA", "DL"]),            # Denver - New York
+    ]
+    
+    # Select a random route
+    origin, destination, carriers = choice(popular_routes)
+    airline = choice(carriers)
     days_ahead = randint(2, 14)  # Avoid same-day, start at 2 days out
     departure_date = (datetime.utcnow() + timedelta(days=days_ahead)).date().isoformat()
     
@@ -107,7 +119,7 @@ def random_flight_suggestion() -> dict:
         "preferredAirline": airline,
         "departureDate": departure_date,
         "passengers": 1,
-        "note": "Sample suggestion. You can ask to search these flights or change any parameter."
+        "note": "Sample suggestion for a popular US domestic route. You can ask to search these flights or change any parameter."
     }
 
 
