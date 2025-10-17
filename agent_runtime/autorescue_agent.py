@@ -90,23 +90,67 @@ def current_time() -> str:
 @tool
 def random_flight_suggestion() -> dict:
     """Generate a random flight search suggestion.
-    Returns a dict with origin (North America), destination (Europe), airline (AA, BA, DL, LA, AF), and departure_date within next 14 days.
+    Returns a dict with origin (North America), destination (Europe), airline based on route, and departure_date within next 14 days.
     """
-    north_america_airports = ["JFK", "EWR", "LAX", "ORD", "DFW", "MIA", "ATL", "YYZ", "YUL", "SEA"]
-    europe_airports = ["LHR", "LGW", "CDG", "AMS", "FRA", "MAD", "BCN", "MUC", "DUB", "CPH"]
-    airlines = ["AA", "BA", "DL", "LA", "AF"]
-    origin = choice(north_america_airports)
-    destination = choice(europe_airports)
-    airline = choice(airlines)
+    # North America airports with country mapping
+    north_america_airports = {
+        "JFK": "US", "EWR": "US", "LAX": "US", "ORD": "US", "DFW": "US", 
+        "MIA": "US", "ATL": "US", "SEA": "US", "BOS": "US", "IAD": "US",
+        "YYZ": "CA", "YUL": "CA", "YVR": "CA"
+    }
+    
+    # Europe airports with country mapping
+    europe_airports = {
+        "LHR": "GB", "LGW": "GB", "MAN": "GB",  # UK
+        "CDG": "FR", "ORY": "FR",  # France
+        "AMS": "NL",  # Netherlands
+        "FRA": "FR", "MUC": "DE",  # Germany
+        "MAD": "ES", "BCN": "ES",  # Spain
+        "DUB": "IE",  # Ireland
+        "CPH": "DK",  # Denmark
+        "FCO": "IT", "MXP": "IT"  # Italy
+    }
+    
+    # Major carriers by country/region
+    carriers = {
+        "US": ["AA", "DL", "UA"],  # American, Delta, United
+        "CA": ["AC"],  # Air Canada
+        "GB": ["BA", "VS"],  # British Airways, Virgin Atlantic
+        "FR": ["AF"],  # Air France
+        "NL": ["KL"],  # KLM
+        "DE": ["LH"],  # Lufthansa
+        "ES": ["IB"],  # Iberia
+        "IE": ["EI"],  # Aer Lingus
+        "DK": ["SK"],  # SAS Scandinavian
+        "IT": ["AZ"]  # ITA Airways
+    }
+    
+    # Select random airports
+    origin = choice(list(north_america_airports.keys()))
+    destination = choice(list(europe_airports.keys()))
+    
+    # Get countries
+    origin_country = north_america_airports[origin]
+    destination_country = europe_airports[destination]
+    
+    # Choose airline from either origin or destination country
+    available_carriers = carriers.get(origin_country, []) + carriers.get(destination_country, [])
+    
+    # If no carriers found (shouldn't happen), use default major transatlantic carriers
+    if not available_carriers:
+        available_carriers = ["AA", "BA", "DL", "AF", "AC"]
+    
+    airline = choice(available_carriers)
     days_ahead = randint(2, 14)  # Avoid same-day, start at 2 days out
     departure_date = (datetime.utcnow() + timedelta(days=days_ahead)).date().isoformat()
+    
     return {
         "origin": origin,
         "destination": destination,
         "preferredAirline": airline,
         "departureDate": departure_date,
         "passengers": 1,
-        "note": "Sample suggestion. You can ask to search these flights or change any parameter."
+        "note": f"Sample transatlantic route with {airline} carrier based on origin/destination countries."
     }
 
 
@@ -155,7 +199,6 @@ Your role is to help travelers with:
 
 1. **Flight Search**: Find available flights between airports on specific dates
 2. **Flight Pricing**: Get final pricing and booking details for selected flights
-3. **Disruption Analysis**: When flights are canceled or delayed, find alternative options
 
 ## Complete Booking Workflow
 
