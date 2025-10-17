@@ -213,20 +213,39 @@ def show_home_page():
         try:
             with st.spinner("Loading passenger itinerary..."):
                 suggestion_response = call_agent_runtime("Generate a random flight suggestion")
+            
+            # Log the raw response for debugging
+            print(f"[DEBUG] Agent response type: {type(suggestion_response)}")
+            print(f"[DEBUG] Agent response: {suggestion_response}")
+            
             suggestion = None
             if isinstance(suggestion_response, dict):
                 # Attempt to parse JSON block from response if present
                 raw_text = suggestion_response.get("response", "")
+                print(f"[DEBUG] Raw text from response: {raw_text[:200]}...")
+                
                 # Heuristic: find first JSON-like brace section
                 start = raw_text.find("{")
                 end = raw_text.rfind("}")
+                print(f"[DEBUG] JSON boundaries - start: {start}, end: {end}")
+                
                 if start != -1 and end != -1 and end > start:
                     try:
-                        suggestion = json.loads(raw_text[start:end+1])
-                    except Exception:
+                        json_str = raw_text[start:end+1]
+                        print(f"[DEBUG] Attempting to parse JSON: {json_str}")
+                        suggestion = json.loads(json_str)
+                        print(f"[DEBUG] Successfully parsed suggestion: {suggestion}")
+                    except Exception as parse_error:
+                        print(f"[DEBUG] JSON parse error: {parse_error}")
                         suggestion = None
+            
+            print(f"[DEBUG] Final suggestion object: {suggestion}")
+            print(f"[DEBUG] Suggestion validation - has required keys: {suggestion and all(k in suggestion for k in ['origin', 'destination', 'departureDate'])}")
+            
             if suggestion and all(k in suggestion for k in ["origin", "destination", "departureDate"]):
                 st.session_state.random_suggestion = suggestion
+                print(f"[DEBUG] Stored suggestion in session state: {st.session_state.random_suggestion}")
+                
                 # Add a disruption notification message
                 airline = suggestion.get('preferredAirline', 'Airline')
                 today = datetime.utcnow().date().isoformat()
@@ -243,39 +262,10 @@ def show_home_page():
                         ),
                     }
                 )
-            else:
-                # Fallback: generate suggestion locally if agent didn't return structured JSON
-                from random import choice, randint
-                from datetime import datetime, timedelta
-                north_america_airports = ["JFK", "EWR", "LAX", "ORD", "DFW", "MIA", "ATL", "YYZ", "YUL", "SEA"]
-                europe_airports = ["LHR", "LGW", "CDG", "AMS", "FRA", "MAD", "BCN", "MUC", "DUB", "CPH"]
-                airlines = ["AA", "BA", "DL", "LA", "AF"]
-                fallback = {
-                    "origin": choice(north_america_airports),
-                    "destination": choice(europe_airports),
-                    "preferredAirline": choice(airlines),
-                    "departureDate": (datetime.utcnow() + timedelta(days=randint(2,14))).date().isoformat(),
-                    "passengers": 1,
-                    "note": "Locally generated suggestion (agent unavailable)."
-                }
-                st.session_state.random_suggestion = fallback
-                # Add a disruption notification message for fallback
-                airline = fallback.get('preferredAirline', 'Airline')
-                today = datetime.utcnow().date().isoformat()
-                st.session_state.messages.append(
-                    {
-                        "role": "assistant",
-                        "content": (
-                            f"📧 **Message from {airline}:**\n\n"
-                            f"Dear {st.session_state.username},\n\n"
-                            f"We sincerely apologize to inform you that your flight **{airline} {fallback['origin']} ➜ {fallback['destination']}** "
-                            f"scheduled for **{fallback['departureDate']}** has been cancelled due to unforeseen circumstances.\n\n"
-                            f"**Would you like to reschedule this itinerary?**\n\n"
-                            f"Please provide your preferred date of travel below to search for available alternatives on the same route and airline."
-                        ),
-                    }
-                )
         except Exception as e:
+            print(f"[ERROR] Exception during suggestion generation: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             st.session_state.random_suggestion = None
             st.warning(f"Could not generate sample itinerary: {e}")
 

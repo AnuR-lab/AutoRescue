@@ -88,39 +88,34 @@ def current_time() -> str:
 
 
 @tool
-def random_flight_suggestion() -> dict:
+def random_flight_suggestion() -> str:
     """Generate a random flight search suggestion.
-    Returns a dict with origin and destination (popular US domestic routes with daily service), airline, and departure_date within next 14 days.
+    Returns a JSON string with origin, destination, preferredAirline, and departureDate for a popular international route with daily service.
     """
-    # Popular US domestic trunk routes with high frequency and availability
-    # Each route paired with carriers that actually operate it
+    # Specific international routes with their designated carriers
+    # Format: (origin, destination, carrier)
     popular_routes = [
-        ("JFK", "LAX", ["AA", "DL", "B6"]),      # New York - Los Angeles
-        ("EWR", "SFO", ["UA", "DL"]),            # Newark - San Francisco
-        ("ORD", "LAX", ["AA", "UA"]),            # Chicago - Los Angeles
-        ("DFW", "LAX", ["AA"]),                   # Dallas - Los Angeles
-        ("ATL", "LAX", ["DL"]),                   # Atlanta - Los Angeles
-        ("BOS", "LAX", ["DL", "B6", "AA"]),      # Boston - Los Angeles
-        ("JFK", "SFO", ["B6", "UA", "DL"]),      # New York - San Francisco
-        ("MIA", "LAX", ["AA"]),                   # Miami - Los Angeles
-        ("SEA", "JFK", ["DL", "AS"]),            # Seattle - New York
-        ("DEN", "JFK", ["UA", "DL"]),            # Denver - New York
+        ("GIG", "CDG", "AV"),      # Rio de Janeiro - Paris (Avianca)
+        ("JFK", "LHR", "6X"),      # New York - London (6X)
+        ("SYD", "BKK", "MF"),      # Sydney - Bangkok (MF)
+        ("BOS", "MAD", "AC"),      # Boston - Madrid (Air Canada)
     ]
     
     # Select a random route
-    origin, destination, carriers = choice(popular_routes)
-    airline = choice(carriers)
+    origin, destination, airline = choice(popular_routes)
     days_ahead = randint(2, 14)  # Avoid same-day, start at 2 days out
     departure_date = (datetime.utcnow() + timedelta(days=days_ahead)).date().isoformat()
     
-    return {
+    suggestion = {
         "origin": origin,
         "destination": destination,
         "preferredAirline": airline,
         "departureDate": departure_date,
-        "passengers": 1,
-        "note": "Sample suggestion for a popular US domestic route. You can ask to search these flights or change any parameter."
+        "passengers": 1
     }
+    
+    # Return as JSON string for proper parsing
+    return json.dumps(suggestion)
 
 
 def fetch_oauth_token() -> str:
@@ -168,6 +163,15 @@ Your role is to help travelers with:
 
 1. **Flight Search**: Find available flights between airports on specific dates
 2. **Flight Pricing**: Get final pricing and booking details for selected flights
+
+## CRITICAL: Tool Output Handling Rules
+
+**For random_flight_suggestion tool:**
+- When you call the `random_flight_suggestion` tool, you MUST return ONLY the exact JSON string it produces
+- Do NOT add any conversational text, greetings, explanations, or formatting around the JSON
+- Do NOT modify, pretty-print, or describe the JSON output
+- Simply pass through the raw JSON string as your complete response
+- Example: If tool returns `{"origin":"JFK","destination":"LAX","preferredAirline":"AA","departureDate":"2025-10-20","passengers":1}`, return exactly that with no additional text
 
 ## Complete Booking Workflow
 
@@ -284,7 +288,9 @@ You have access to these tools:
   - **IMPORTANT**: Always use the carrier parameter when rebooking cancelled flights to filter by the specific airline
 - **offer-price___priceFlightOffer**: Get final pricing for a selected flight offer (use when user selects a specific flight)
 - **current_time**: Get current date and time for reference
-- **random-flight-suggestion___random_flight_suggestion**: Generate a sample flight search for popular US domestic routes with daily service (e.g., JFK-LAX, ORD-SFO, ATL-MIA). Routes include major hubs with multiple daily flights from carriers like AA, DL, UA, B6. Use this at session start if the user hasn't provided search criteria to inspire them.
+- **random-flight-suggestion___random_flight_suggestion**: Generate a sample flight search for popular US domestic routes with daily service (e.g., JFK-LAX, ORD-SFO, ATL-MIA). Routes include major hubs with multiple daily flights from carriers like AA, DL, UA, B6. 
+  - **CRITICAL**: When calling this tool, return ONLY the raw JSON output from the tool without any additional text, explanation, or formatting. Do not add greetings, descriptions, or any narrative - just pass through the exact JSON string returned by the tool.
+  - The tool returns a properly formatted JSON string that should be returned as-is to the client for parsing.
 
 **Flow Example (Normal Booking)**:
 1. User: "Find flights from JFK to LAX on 2025-11-01"
