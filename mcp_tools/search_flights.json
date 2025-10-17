@@ -3,7 +3,11 @@
   "description": "Search for flight offers for a specific route and date",
   "inputSchema": {
     "type": "object",
-    "required": ["origin", "destination", "departure_date"],
+    "required": [
+      "origin",
+      "destination",
+      "departure_date"
+    ],
     "properties": {
       "origin": {
         "type": "string",
@@ -24,6 +28,10 @@
       "max_results": {
         "type": "integer",
         "description": "Maximum number of flight results (default: 5)"
+      },
+      "carrier": {
+        "type": "string",
+        "description": "Airline carrier code(s) to filter results (e.g., 'AA' for American Airlines, 'BA' for British Airways). Multiple codes can be comma-separated (e.g., 'AA,BA,DL'). Optional."
       }
     }
   }

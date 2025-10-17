@@ -94,7 +94,8 @@ def search_flights(
     destination: str,
     departure_date: str,
     adults: int = 1,
-    max_results: int = 5
+    max_results: int = 5,
+    carrier: str = None
 ) -> Dict[str, Any]:
     """
     Search for flight offers using Amadeus API
@@ -105,6 +106,7 @@ def search_flights(
         departure_date: Departure date in YYYY-MM-DD format
         adults: Number of adult passengers (default: 1)
         max_results: Maximum number of results to return (default: 5)
+        carrier: Airline carrier code(s) to filter by (e.g., 'AA', 'BA,DL') (optional)
     
     Returns:
         Dictionary containing flight offers and metadata
@@ -127,6 +129,10 @@ def search_flights(
             "max": str(max_results),
             "currencyCode": "USD"
         }
+        
+        # Add carrier filter if provided
+        if carrier:
+            params["includedAirlineCodes"] = carrier.upper()
         
         # Make API call
         response = requests.get(url, headers=headers, params=params)
@@ -239,6 +245,7 @@ def lambda_handler(event, context):
         departure_date = body.get('departure_date') or body.get('departureDate')
         adults = body.get('adults', 1)
         max_results = body.get('max_results', 5)
+        carrier = body.get('carrier')
         
         print(f"[SEARCH_FLIGHTS] Parameters - Origin: {origin}, Destination: {destination}, Date: {departure_date}, Adults: {adults}")
         
@@ -262,7 +269,8 @@ def lambda_handler(event, context):
             destination=destination,
             departure_date=departure_date,
             adults=int(adults),
-            max_results=int(max_results)
+            max_results=int(max_results),
+            carrier=carrier
         )
         
         print(f"[SEARCH_FLIGHTS] Search completed. Success: {result.get('success')}, Flight count: {result.get('flight_count', 0)}")

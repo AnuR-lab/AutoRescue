@@ -239,7 +239,7 @@ def show_home_page():
                             f"We sincerely apologize to inform you that your flight **{airline} {suggestion['origin']} ➜ {suggestion['destination']}** "
                             f"scheduled for **{suggestion['departureDate']}** has been cancelled due to unforeseen circumstances.\n\n"
                             f"**Would you like to reschedule this itinerary?**\n\n"
-                            f"You can modify the origin, destination, date, or airline preference below and search for available alternatives."
+                            f"Please provide your preferred date of travel below to search for available alternatives on the same route and airline."
                         ),
                     }
                 )
@@ -271,7 +271,7 @@ def show_home_page():
                             f"We sincerely apologize to inform you that your flight **{airline} {fallback['origin']} ➜ {fallback['destination']}** "
                             f"scheduled for **{fallback['departureDate']}** has been cancelled due to unforeseen circumstances.\n\n"
                             f"**Would you like to reschedule this itinerary?**\n\n"
-                            f"You can modify the origin, destination, date, or airline preference below and search for available alternatives."
+                            f"Please provide your preferred date of travel below to search for available alternatives on the same route and airline."
                         ),
                     }
                 )
@@ -289,18 +289,23 @@ def show_home_page():
         sugg = st.session_state.random_suggestion
         with st.container(border=True):
             st.subheader("✈️ Cancelled Flight - Reschedule Options")
-            st.caption("⚠️ Original itinerary cancelled. Modify details below and search for alternatives.")
+            st.caption("⚠️ Original route and airline are locked. Please select a new departure date.")
+            
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                origin = st.text_input("Origin", sugg["origin"], key="sugg_origin")
+                st.text_input("Origin", sugg["origin"], key="sugg_origin", disabled=True, 
+                            help="Route is locked from cancelled booking")
             with col2:
-                destination = st.text_input("Destination", sugg["destination"], key="sugg_destination")
+                st.text_input("Destination", sugg["destination"], key="sugg_destination", disabled=True,
+                            help="Route is locked from cancelled booking")
             with col3:
-                date = st.text_input("Departure Date", sugg["departureDate"], key="sugg_date")
+                date = st.text_input("Departure Date", sugg["departureDate"], key="sugg_date",
+                                   help="Select your preferred new departure date")
             with col4:
-                airline = st.text_input("Preferred Airline", sugg.get("preferredAirline", ""), key="sugg_airline")
+                st.text_input("Airline", sugg.get("preferredAirline", ""), key="sugg_airline", disabled=True,
+                            help="Airline is locked from cancelled booking")
             
-            # Custom CSS for blue button
+            # Custom CSS for blue button and disabled inputs styling
             st.markdown("""
                 <style>
                 div[data-testid="stButton"] button[kind="primary"] {
@@ -311,6 +316,12 @@ def show_home_page():
                     background-color: #0052A3 !important;
                     border-color: #0052A3 !important;
                 }
+                /* Style for disabled inputs to show they're locked */
+                input[disabled] {
+                    background-color: #f0f0f0 !important;
+                    color: #666 !important;
+                    cursor: not-allowed !important;
+                }
                 </style>
             """, unsafe_allow_html=True)
             
@@ -318,15 +329,24 @@ def show_home_page():
                 # Mark suggestion as used
                 st.session_state.suggestion_used = True
                 
-                # Formulate a disruption handling prompt
+                # Use LOCKED values from original suggestion
+                origin = sugg["origin"]
+                destination = sugg["destination"]
+                airline = sugg.get("preferredAirline", "")
+                
+                # Formulate a disruption handling prompt with locked parameters
                 prompt = (
-                    f"My flight from {sugg['origin']} to {sugg['destination']} on {sugg['departureDate']} was cancelled. "
-                    f"Please help me find alternative flights from {origin} to {destination} on {date} for 1 passenger."
-                    + (f" I prefer airline {airline}." if airline else "")
+                    f"IMPORTANT: The passenger's cancelled flight had these FIXED parameters that CANNOT be changed:\n"
+                    f"- Origin: {origin} (LOCKED)\n"
+                    f"- Destination: {destination} (LOCKED)\n"
+                    f"- Airline: {airline} (LOCKED)\n\n"
+                    f"The passenger wants to reschedule to: {date}\n\n"
+                    f"Please search for flights from {origin} to {destination} on {date} for 1 passenger with carrier {airline}. "
+                    f"Use the carrier parameter to filter results."
                 )
                 st.session_state.messages.append({"role": "user", "content": prompt})
                 with st.chat_message("user"):
-                    st.markdown(prompt)
+                    st.markdown(f"Find flights from **{origin}** to **{destination}** on **{date}** with **{airline}**")
                 with st.chat_message("assistant"):
                     with st.spinner("Searching flights..."):
                         response_data = call_agent_runtime(prompt)
