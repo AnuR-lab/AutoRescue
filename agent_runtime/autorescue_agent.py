@@ -8,8 +8,9 @@ import json
 import boto3
 import logging
 from typing import List, Optional, Dict
-from datetime import datetime
+from datetime import datetime, timedelta
 import requests
+from random import choice, randint
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from strands import Agent, tool
 from strands.models import BedrockModel
@@ -84,6 +85,29 @@ MODEL_ID = os.getenv(
 def current_time() -> str:
     """Get the current date and time in ISO format."""
     return datetime.now().isoformat()
+
+
+@tool
+def random_flight_suggestion() -> dict:
+    """Generate a random flight search suggestion.
+    Returns a dict with origin (North America), destination (Europe), airline (AA, BA, DL, LA, AF), and departure_date within next 14 days.
+    """
+    north_america_airports = ["JFK", "EWR", "LAX", "ORD", "DFW", "MIA", "ATL", "YYZ", "YUL", "SEA"]
+    europe_airports = ["LHR", "LGW", "CDG", "AMS", "FRA", "MAD", "BCN", "MUC", "DUB", "CPH"]
+    airlines = ["AA", "BA", "DL", "LA", "AF"]
+    origin = choice(north_america_airports)
+    destination = choice(europe_airports)
+    airline = choice(airlines)
+    days_ahead = randint(2, 14)  # Avoid same-day, start at 2 days out
+    departure_date = (datetime.utcnow() + timedelta(days=days_ahead)).date().isoformat()
+    return {
+        "origin": origin,
+        "destination": destination,
+        "preferredAirline": airline,
+        "departureDate": departure_date,
+        "passengers": 1,
+        "note": "Sample suggestion. You can ask to search these flights or change any parameter."
+    }
 
 
 def fetch_oauth_token() -> str:
@@ -227,6 +251,7 @@ You have access to these tools:
 - **search-flights___searchFlights**: Search for available flights
 - **offer-price___priceFlightOffer**: Get final pricing for a selected flight offer (use when user selects a specific flight)
 - **current_time**: Get current date and time for reference
+- **random-flight-suggestion___random_flight_suggestion**: Generate a sample transatlantic flight search (random North America origin, random Europe destination, one of major airlines AA/BA/DL/LA/AF, and a date within the next 14 days). Use this at session start if the user hasn't provided search criteria to inspire them.
 
 **Flow Example**:
 1. User: "Find flights from JFK to LAX on 2025-11-01"
@@ -290,6 +315,7 @@ class AutoRescueAgent:
         # Collect all tools
         self.tools = [
             current_time,  # Built-in time tool
+            random_flight_suggestion,  # Random flight suggestion tool
         ] + self.gateway_client.list_tools_sync()  # Gateway MCP tools
         
         if additional_tools:

@@ -47,11 +47,3 @@ def show_login_page():
                         st.error("❌ Invalid username or password")
                 else:
                     st.warning("⚠️ Please enter both username and password")
-        
-        # Demo credentials info
-        st.markdown("---")
-        st.info("""
-        **Demo Credentials:**
-        - Username: `admin` / Password: `admin123`
-        - Username: `demo` / Password: `demo123`
-        """)

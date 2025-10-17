@@ -40,7 +40,6 @@ def init_agent_runtime():
                 try:
                     with st.spinner("Fetching Agent Runtime ARN from AWS Secrets Manager..."):
                         AGENT_RUNTIME_ARN = get_agent_runtime_arn(region_name=AWS_REGION)
-                    st.success("✓ Agent Runtime ARN retrieved from Secrets Manager")
                 except Exception as e:
                     st.error(f"❌ Failed to retrieve agent runtime ARN from Secrets Manager: {str(e)}")
                     with st.expander("📋 Configuration Instructions"):
@@ -194,6 +193,8 @@ def show_home_page():
         if st.button("🗑️ Clear Chat", use_container_width=True):
             st.session_state.messages = []
             st.session_state.pending_handoff = None
+            st.session_state.suggestion_used = False  # Reset suggestion flag
+            st.session_state.random_suggestion = None  # Clear suggestion
             # Generate new session ID for fresh conversation
             st.session_state.agent_runtime_config["session_id"] = (
                 str(uuid.uuid4()) + "extra_chars_to_meet_33_char_min"
@@ -207,18 +208,137 @@ def show_home_page():
     # Initialize chat history
     if "messages" not in st.session_state:
         st.session_state.messages = []
-        # Add welcome message
-        st.session_state.messages.append(
-            {
-                "role": "assistant",
-                "content": f"Hello {st.session_state.username}! 👋 I'm your AutoRescue Flight Assistant. I can help you:\n\n- **Search for flights** between airports\n- **Handle disruptions** like cancellations or delays\n- **Find alternatives** when plans change\n\nHow can I assist you today?",
-            }
-        )
+        st.session_state.suggestion_used = False  # Track if suggestion has been used
+        # Fetch a random flight suggestion from agent runtime
+        try:
+            with st.spinner("Loading passenger itinerary..."):
+                suggestion_response = call_agent_runtime("Generate a random flight suggestion")
+            suggestion = None
+            if isinstance(suggestion_response, dict):
+                # Attempt to parse JSON block from response if present
+                raw_text = suggestion_response.get("response", "")
+                # Heuristic: find first JSON-like brace section
+                start = raw_text.find("{")
+                end = raw_text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    try:
+                        suggestion = json.loads(raw_text[start:end+1])
+                    except Exception:
+                        suggestion = None
+            if suggestion and all(k in suggestion for k in ["origin", "destination", "departureDate"]):
+                st.session_state.random_suggestion = suggestion
+                # Add a disruption notification message
+                airline = suggestion.get('preferredAirline', 'Airline')
+                today = datetime.utcnow().date().isoformat()
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": (
+                            f"📧 **Message from {airline}:**\n\n"
+                            f"Dear {st.session_state.username},\n\n"
+                            f"We sincerely apologize to inform you that your flight **{airline} {suggestion['origin']} ➜ {suggestion['destination']}** "
+                            f"scheduled for **{suggestion['departureDate']}** has been cancelled due to unforeseen circumstances.\n\n"
+                            f"**Would you like to reschedule this itinerary?**\n\n"
+                            f"You can modify the origin, destination, date, or airline preference below and search for available alternatives."
+                        ),
+                    }
+                )
+            else:
+                # Fallback: generate suggestion locally if agent didn't return structured JSON
+                from random import choice, randint
+                from datetime import datetime, timedelta
+                north_america_airports = ["JFK", "EWR", "LAX", "ORD", "DFW", "MIA", "ATL", "YYZ", "YUL", "SEA"]
+                europe_airports = ["LHR", "LGW", "CDG", "AMS", "FRA", "MAD", "BCN", "MUC", "DUB", "CPH"]
+                airlines = ["AA", "BA", "DL", "LA", "AF"]
+                fallback = {
+                    "origin": choice(north_america_airports),
+                    "destination": choice(europe_airports),
+                    "preferredAirline": choice(airlines),
+                    "departureDate": (datetime.utcnow() + timedelta(days=randint(2,14))).date().isoformat(),
+                    "passengers": 1,
+                    "note": "Locally generated suggestion (agent unavailable)."
+                }
+                st.session_state.random_suggestion = fallback
+                # Add a disruption notification message for fallback
+                airline = fallback.get('preferredAirline', 'Airline')
+                today = datetime.utcnow().date().isoformat()
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": (
+                            f"📧 **Message from {airline}:**\n\n"
+                            f"Dear {st.session_state.username},\n\n"
+                            f"We sincerely apologize to inform you that your flight **{airline} {fallback['origin']} ➜ {fallback['destination']}** "
+                            f"scheduled for **{fallback['departureDate']}** has been cancelled due to unforeseen circumstances.\n\n"
+                            f"**Would you like to reschedule this itinerary?**\n\n"
+                            f"You can modify the origin, destination, date, or airline preference below and search for available alternatives."
+                        ),
+                    }
+                )
+        except Exception as e:
+            st.session_state.random_suggestion = None
+            st.warning(f"Could not generate sample itinerary: {e}")
 
     # Display chat messages
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
+
+    # If we have a random suggestion and it hasn't been used yet, show a helper panel
+    if st.session_state.get("random_suggestion") and not st.session_state.get("suggestion_used", False):
+        sugg = st.session_state.random_suggestion
+        with st.container(border=True):
+            st.subheader("✈️ Cancelled Flight - Reschedule Options")
+            st.caption("⚠️ Original itinerary cancelled. Modify details below and search for alternatives.")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                origin = st.text_input("Origin", sugg["origin"], key="sugg_origin")
+            with col2:
+                destination = st.text_input("Destination", sugg["destination"], key="sugg_destination")
+            with col3:
+                date = st.text_input("Departure Date", sugg["departureDate"], key="sugg_date")
+            with col4:
+                airline = st.text_input("Preferred Airline", sugg.get("preferredAirline", ""), key="sugg_airline")
+            
+            # Custom CSS for blue button
+            st.markdown("""
+                <style>
+                div[data-testid="stButton"] button[kind="primary"] {
+                    background-color: #0066CC !important;
+                    border-color: #0066CC !important;
+                }
+                div[data-testid="stButton"] button[kind="primary"]:hover {
+                    background-color: #0052A3 !important;
+                    border-color: #0052A3 !important;
+                }
+                </style>
+            """, unsafe_allow_html=True)
+            
+            if st.button("🔍 Find Alternative Flights", use_container_width=True, type="primary"):
+                # Mark suggestion as used
+                st.session_state.suggestion_used = True
+                
+                # Formulate a disruption handling prompt
+                prompt = (
+                    f"My flight from {sugg['origin']} to {sugg['destination']} on {sugg['departureDate']} was cancelled. "
+                    f"Please help me find alternative flights from {origin} to {destination} on {date} for 1 passenger."
+                    + (f" I prefer airline {airline}." if airline else "")
+                )
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                with st.chat_message("assistant"):
+                    with st.spinner("Searching flights..."):
+                        response_data = call_agent_runtime(prompt)
+                        if "error" in response_data:
+                            error_msg = response_data.get("response", "An error occurred.")
+                            st.error(error_msg)
+                            response_text = error_msg
+                        else:
+                            response_text = response_data.get("response", "No response from agent.")
+                            st.markdown(response_text)
+                        st.session_state.messages.append({"role": "assistant", "content": response_text})
+                st.rerun()
 
     # ----- HANDOFF GATE (must be before chat_input) -----
     if st.session_state.pending_handoff:
