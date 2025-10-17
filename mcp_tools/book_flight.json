@@ -1,0 +1,382 @@
+{
+    "name": "book_flight",
+    "description": "Book a flight using the Amadeus Flight Create Orders API after pricing confirmation",
+    "inputSchema": {
+        "type": "object",
+        "properties": {
+            "flight_offer": {
+                "type": "object",
+                "description": "The complete flight offer object from the pricing response",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "description": "Type of the flight offer (e.g., 'flight-offer')"
+                    },
+                    "id": {
+                        "type": "string",
+                        "description": "Unique identifier for the flight offer"
+                    },
+                    "source": {
+                        "type": "string",
+                        "description": "Source of the flight offer"
+                    },
+                    "instantTicketingRequired": {
+                        "type": "boolean",
+                        "description": "Whether instant ticketing is required"
+                    },
+                    "nonHomogeneous": {
+                        "type": "boolean",
+                        "description": "Whether the offer is non-homogeneous"
+                    },
+                    "oneWay": {
+                        "type": "boolean",
+                        "description": "Whether this is a one-way flight"
+                    },
+                    "lastTicketingDate": {
+                        "type": "string",
+                        "description": "Last date for ticketing"
+                    },
+                    "lastTicketingDateTime": {
+                        "type": "string",
+                        "description": "Last date and time for ticketing"
+                    },
+                    "numberOfBookableSeats": {
+                        "type": "number",
+                        "description": "Number of bookable seats available"
+                    },
+                    "itineraries": {
+                        "type": "array",
+                        "description": "Flight itineraries"
+                    },
+                    "price": {
+                        "type": "object",
+                        "description": "Price information for the flight"
+                    },
+                    "pricingOptions": {
+                        "type": "object",
+                        "description": "Pricing options for the flight"
+                    },
+                    "validatingAirlineCodes": {
+                        "type": "array",
+                        "description": "Validating airline codes"
+                    },
+                    "travelerPricings": {
+                        "type": "array",
+                        "description": "Traveler pricing information"
+                    }
+                },
+                "required": [
+                    "type",
+                    "id",
+                    "itineraries",
+                    "price",
+                    "travelerPricings"
+                ]
+            },
+            "travelers": {
+                "type": "array",
+                "description": "Array of travelers for the booking",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {
+                            "type": "string",
+                            "description": "Unique identifier for the traveler"
+                        },
+                        "dateOfBirth": {
+                            "type": "string",
+                            "description": "Date of birth in YYYY-MM-DD format"
+                        },
+                        "name": {
+                            "type": "object",
+                            "properties": {
+                                "firstName": {
+                                    "type": "string",
+                                    "description": "First name of the traveler"
+                                },
+                                "lastName": {
+                                    "type": "string",
+                                    "description": "Last name of the traveler"
+                                }
+                            },
+                            "required": [
+                                "firstName",
+                                "lastName"
+                            ]
+                        },
+                        "gender": {
+                            "type": "string",
+                            "enum": [
+                                "MALE",
+                                "FEMALE"
+                            ],
+                            "description": "Gender of the traveler"
+                        },
+                        "contact": {
+                            "type": "object",
+                            "properties": {
+                                "emailAddress": {
+                                    "type": "string",
+                                    "description": "Email address of the traveler"
+                                },
+                                "phones": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "deviceType": {
+                                                "type": "string",
+                                                "enum": [
+                                                    "MOBILE",
+                                                    "LANDLINE"
+                                                ],
+                                                "description": "Type of phone device"
+                                            },
+                                            "countryCallingCode": {
+                                                "type": "string",
+                                                "description": "Country calling code"
+                                            },
+                                            "number": {
+                                                "type": "string",
+                                                "description": "Phone number"
+                                            }
+                                        },
+                                        "required": [
+                                            "deviceType",
+                                            "countryCallingCode",
+                                            "number"
+                                        ]
+                                    }
+                                }
+                            },
+                            "required": [
+                                "emailAddress"
+                            ]
+                        },
+                        "documents": {
+                            "type": "array",
+                            "description": "Travel documents (e.g., passport)",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "documentType": {
+                                        "type": "string",
+                                        "enum": [
+                                            "PASSPORT",
+                                            "ID_CARD",
+                                            "DRIVER_LICENSE"
+                                        ],
+                                        "description": "Type of document"
+                                    },
+                                    "birthPlace": {
+                                        "type": "string",
+                                        "description": "Place of birth"
+                                    },
+                                    "issuanceLocation": {
+                                        "type": "string",
+                                        "description": "Location where document was issued"
+                                    },
+                                    "issuanceDate": {
+                                        "type": "string",
+                                        "description": "Date of issuance in YYYY-MM-DD format"
+                                    },
+                                    "number": {
+                                        "type": "string",
+                                        "description": "Document number"
+                                    },
+                                    "expiryDate": {
+                                        "type": "string",
+                                        "description": "Expiry date in YYYY-MM-DD format"
+                                    },
+                                    "issuanceCountry": {
+                                        "type": "string",
+                                        "description": "Country of issuance (ISO 3166-1 alpha-2)"
+                                    },
+                                    "validityCountry": {
+                                        "type": "string",
+                                        "description": "Country where document is valid (ISO 3166-1 alpha-2)"
+                                    },
+                                    "nationality": {
+                                        "type": "string",
+                                        "description": "Nationality (ISO 3166-1 alpha-2)"
+                                    },
+                                    "holder": {
+                                        "type": "boolean",
+                                        "description": "Whether the person is the holder of the document"
+                                    }
+                                },
+                                "required": [
+                                    "documentType",
+                                    "number",
+                                    "expiryDate",
+                                    "issuanceCountry",
+                                    "nationality",
+                                    "holder"
+                                ]
+                            }
+                        }
+                    },
+                    "required": [
+                        "id",
+                        "dateOfBirth",
+                        "name",
+                        "gender",
+                        "contact"
+                    ]
+                },
+                "minItems": 1
+            },
+            "remarks": {
+                "type": "object",
+                "description": "Optional remarks for the booking",
+                "properties": {
+                    "general": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "subType": {
+                                    "type": "string",
+                                    "description": "Subtype of the remark"
+                                },
+                                "text": {
+                                    "type": "string",
+                                    "description": "Remark text"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "ticketing_agreement": {
+                "type": "object",
+                "description": "Ticketing agreement details",
+                "properties": {
+                    "option": {
+                        "type": "string",
+                        "enum": [
+                            "DELAY_TO_CANCEL",
+                            "DELAY_TO_QUEUE"
+                        ],
+                        "description": "Ticketing option"
+                    },
+                    "delay": {
+                        "type": "string",
+                        "description": "Delay period (e.g., '6D' for 6 days)"
+                    }
+                }
+            },
+            "contacts": {
+                "type": "array",
+                "description": "Contact information for the booking",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "addresseeName": {
+                            "type": "object",
+                            "properties": {
+                                "firstName": {
+                                    "type": "string",
+                                    "description": "First name of the contact"
+                                },
+                                "lastName": {
+                                    "type": "string",
+                                    "description": "Last name of the contact"
+                                }
+                            },
+                            "required": [
+                                "firstName",
+                                "lastName"
+                            ]
+                        },
+                        "companyName": {
+                            "type": "string",
+                            "description": "Company name (optional)"
+                        },
+                        "purpose": {
+                            "type": "string",
+                            "enum": [
+                                "STANDARD",
+                                "INVOICE"
+                            ],
+                            "description": "Purpose of the contact"
+                        },
+                        "phones": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "deviceType": {
+                                        "type": "string",
+                                        "enum": [
+                                            "MOBILE",
+                                            "LANDLINE"
+                                        ],
+                                        "description": "Type of phone device"
+                                    },
+                                    "countryCallingCode": {
+                                        "type": "string",
+                                        "description": "Country calling code"
+                                    },
+                                    "number": {
+                                        "type": "string",
+                                        "description": "Phone number"
+                                    }
+                                },
+                                "required": [
+                                    "deviceType",
+                                    "countryCallingCode",
+                                    "number"
+                                ]
+                            }
+                        },
+                        "emailAddress": {
+                            "type": "string",
+                            "description": "Email address of the contact"
+                        },
+                        "address": {
+                            "type": "object",
+                            "properties": {
+                                "lines": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "string"
+                                    },
+                                    "description": "Address lines"
+                                },
+                                "postalCode": {
+                                    "type": "string",
+                                    "description": "Postal code"
+                                },
+                                "cityName": {
+                                    "type": "string",
+                                    "description": "City name"
+                                },
+                                "countryCode": {
+                                    "type": "string",
+                                    "description": "Country code (ISO 3166-1 alpha-2)"
+                                }
+                            },
+                            "required": [
+                                "lines",
+                                "postalCode",
+                                "cityName",
+                                "countryCode"
+                            ]
+                        }
+                    },
+                    "required": [
+                        "addresseeName",
+                        "purpose"
+                    ]
+                },
+                "minItems": 1
+            }
+        },
+        "required": [
+            "flight_offer",
+            "travelers",
+            "contacts"
+        ]
+    }
+}

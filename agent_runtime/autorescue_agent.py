@@ -142,7 +142,11 @@ When a user wants to book a flight, follow this exact sequence:
 3. **User Selects** - Wait for user to select their preferred flight option
 4. **Price the Offer** - Use `priceFlightOffer` tool with the COMPLETE flight offer object to get final pricing
 5. **Present Final Details** - Show validated pricing, taxes, fees, and booking requirements
-6. **Confirm Booking** - Proceed only after user confirms the final price
+6. **Collect Booking Information** - When user confirms booking, collect required details:
+   - Traveler information (name, date of birth, gender, contact details)
+   - Travel documents (passport/ID information)
+   - Contact information for booking confirmation
+7. **Complete Booking** - Use `bookFlight` tool to finalize the reservation and receive booking confirmation
 
 ## Guidelines
 
@@ -315,18 +319,26 @@ class AutoRescueAgent:
         try:
             logger.info(f"Processing query: {user_query[:100]}...")
             
-            # Check if this looks like a flight selection query
+            # Check if this looks like a flight selection or booking query
             selection_keywords = [
                 "book", "select", "choose", "i want", "i'll take", 
                 "option", "flight", "cheapest", "morning", "afternoon", 
                 "evening", "direct", "shortest", "fastest"
             ]
             
+            booking_keywords = [
+                "confirm booking", "finalize", "complete booking", "book it",
+                "proceed with booking", "make reservation", "reserve"
+            ]
+            
             query_lower = user_query.lower()
             is_selection_query = any(keyword in query_lower for keyword in selection_keywords)
+            is_booking_query = any(keyword in query_lower for keyword in booking_keywords)
             
             if is_selection_query:
                 logger.info("Detected potential flight selection query")
+            if is_booking_query:
+                logger.info("Detected potential booking completion query")
             
             response = self.agent(user_query)
             result = response.message["content"][0]["text"]

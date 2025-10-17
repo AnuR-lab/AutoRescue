@@ -263,6 +263,93 @@ def create_offer_price_target(client, gateway_id, lambda_arn):
         traceback.print_exc()
         return None
 
+def create_book_flight_target(client, gateway_id, lambda_arn):
+    """Create the Book Flight Lambda target"""
+    print("\n🎯 Creating Book Flight target...")
+    
+    # Load MCP tool definition from JSON file
+    mcp_tool = load_mcp_tool('book_flight')
+    
+    # Create target configuration for Lambda
+    # toolSchema.inlinePayload expects an array of MCP tool definitions
+    target_config = {
+        "mcp": {
+            "lambda": {
+                "lambdaArn": lambda_arn,
+                "toolSchema": {
+                    "inlinePayload": [mcp_tool]
+                }
+            }
+        }
+    }
+    
+    # For Lambda targets, use GATEWAY_IAM_ROLE credential provider type
+    # This uses the gateway's IAM role to invoke the Lambda function
+    credential_configs = [
+        {
+            "credentialProviderType": "GATEWAY_IAM_ROLE"
+        }
+    ]
+    
+    try:
+        response = client.create_gateway_target(
+            gatewayIdentifier=gateway_id,
+            name="book-flight",
+            description="Book flight Lambda target",
+            targetConfiguration=target_config,
+            credentialProviderConfigurations=credential_configs
+        )
+        
+        target_id = response['targetId']
+        print(f"   ✅ Target created: {target_id}")
+        
+        # Wait for target to be ready
+        print(f"   ⏳ Waiting for target to be ready...")
+        for i in range(20):
+            try:
+                status_response = client.get_gateway_target(
+                    gatewayIdentifier=gateway_id,
+                    targetId=target_id
+                )
+                status = status_response.get('status', 'UNKNOWN')
+                
+                if status == 'READY':
+                    print(f"   ✅ Target is READY!")
+                    return target_id
+                elif status == 'FAILED':
+                    failure_reasons = status_response.get('failureReasons', ['Unknown'])
+                    print(f"   ❌ Target FAILED: {failure_reasons}")
+                    return None
+                else:
+                    print(f"   ⏳ Status: {status} (attempt {i+1}/20)")
+                    time.sleep(10)
+            except Exception as check_error:
+                print(f"   ⏳ Checking... (attempt {i+1}/20)")
+                time.sleep(10)
+        
+        print(f"   ⚠️ Timeout waiting for target to be ready")
+        return target_id
+        
+    except client.exceptions.ConflictException:
+        print(f"   ⚠️ Target 'book-flight' already exists")
+        # Try to get existing target
+        try:
+            response = client.list_gateway_targets(gatewayIdentifier=gateway_id)
+            for target in response.get('targets', []):
+                if target.get('name') == 'book-flight':
+                    target_id = target.get('id')
+                    print(f"   ✅ Using existing target: {target_id}")
+                    return target_id
+        except:
+            pass
+        return "EXISTING"  # Special value to indicate target exists
+        
+    except Exception as e:
+        print(f"   ❌ Failed to create target: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def main():
     """Main function"""
     print("🚀 Adding Lambda Targets to AutoRescue Gateway")
@@ -281,31 +368,36 @@ def main():
         print("\n📋 Checking Lambda functions...")
         search_flights_arn = get_lambda_arn(lambda_client, 'AutoRescue-SearchFlights')
         offer_price_arn = get_lambda_arn(lambda_client, 'AutoRescue-OfferPrice')
+        book_flight_arn = get_lambda_arn(lambda_client, 'AutoRescue-BookFlight')
         
-        if not search_flights_arn or not offer_price_arn:
+        if not search_flights_arn or not offer_price_arn or not book_flight_arn:
             print("\n❌ Lambda functions not found! Please deploy them first:")
-            print("   Run: ./scripts/deploy_sam.sh")
+            print("   Run: ./scripts/deploy_lambdas.sh")
             return 1
         
         print(f"   ✅ SearchFlights: {search_flights_arn}")
         print(f"   ✅ OfferPrice: {offer_price_arn}")
+        print(f"   ✅ BookFlight: {book_flight_arn}")
         
         # Create targets with inline IAM role credential configuration
         search_target_id = create_search_flights_target(client, GATEWAY_ID, search_flights_arn)
         offer_price_target_id = create_offer_price_target(client, GATEWAY_ID, offer_price_arn)
+        book_flight_target_id = create_book_flight_target(client, GATEWAY_ID, book_flight_arn)
         
         # Summary
         print("\n" + "=" * 60)
         # If targets exist or were created, consider it success
         search_ok = search_target_id is not None and search_target_id != False
         price_ok = offer_price_target_id is not None and offer_price_target_id != False
+        book_ok = book_flight_target_id is not None and book_flight_target_id != False
         
-        if search_ok and price_ok:
-            print("🎉 SUCCESS! Both targets are available in gateway")
+        if search_ok and price_ok and book_ok:
+            print("🎉 SUCCESS! All three targets are available in gateway")
             print("=" * 60)
             print(f"Gateway ID: {GATEWAY_ID}")
             print(f"Search Flights Target: {search_target_id if search_target_id != 'EXISTING' else 'existing'}")
             print(f"Offer Price Target: {offer_price_target_id if offer_price_target_id != 'EXISTING' else 'existing'}")
+            print(f"Book Flight Target: {book_flight_target_id if book_flight_target_id != 'EXISTING' else 'existing'}")
             print("\n✅ Your AutoRescue gateway is ready to use!")
             print(f"Gateway URL: https://{GATEWAY_ID}.gateway.bedrock-agentcore.{REGION}.amazonaws.com/mcp")
             return 0
@@ -313,6 +405,7 @@ def main():
             print("⚠️ Some targets may have failed to create")
             print(f"   Search Flights: {search_target_id}")
             print(f"   Offer Price: {offer_price_target_id}")
+            print(f"   Book Flight: {book_flight_target_id}")
             print("=" * 60)
             return 1
         
