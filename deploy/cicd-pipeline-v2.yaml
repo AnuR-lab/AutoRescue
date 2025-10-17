@@ -1,0 +1,397 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CI/CD Pipeline for Auto Rescue Advisor - CodePipeline + CodeBuild + CodeDeploy'
+
+Parameters:
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner
+    Default: AnuR-lab
+  
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+    Default: AutoRescue
+  
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch to track
+    Default: main
+  
+  GitHubToken:
+    Type: String
+    Description: GitHub Personal Access Token (Classic)
+    NoEcho: true
+    
+  ExistingEC2InstanceId:
+    Type: String
+    Description: Existing EC2 Instance ID to deploy to
+    Default: i-0387246fda8dc60f1
+
+Resources:
+  # ========================================
+  # Lambda Execution Role for Bucket Cleanup
+  # ========================================
+  BucketCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3CleanupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:GetObject'
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                Resource:
+                  - !Sub 'arn:aws:s3:::auto-rescue-artifacts-${AWS::AccountId}'
+                  - !Sub 'arn:aws:s3:::auto-rescue-artifacts-${AWS::AccountId}/*'
+
+  # ========================================
+  # Lambda Function to Empty S3 Bucket
+  # ========================================
+  BucketCleanupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-BucketCleanup'
+      Runtime: python3.12
+      Handler: index.lambda_handler
+      Role: !GetAtt BucketCleanupLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          
+          s3 = boto3.client('s3')
+          
+          def lambda_handler(event, context):
+              try:
+                  bucket_name = event['ResourceProperties']['BucketName']
+                  
+                  if event['RequestType'] == 'Delete':
+                      # List and delete all versions and objects
+                      paginator = s3.get_paginator('list_object_versions')
+                      pages = paginator.paginate(Bucket=bucket_name)
+                      
+                      for page in pages:
+                          if 'Versions' in page:
+                              for version in page['Versions']:
+                                  s3.delete_object(Bucket=bucket_name, Key=version['Key'], VersionId=version['VersionId'])
+                          if 'DeleteMarkers' in page:
+                              for marker in page['DeleteMarkers']:
+                                  s3.delete_object(Bucket=bucket_name, Key=marker['Key'], VersionId=marker['VersionId'])
+                      
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  else:
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {e}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  # ========================================
+  # Custom Resource to Trigger Cleanup
+  # ========================================
+  BucketCleanupTrigger:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt BucketCleanupLambda.Arn
+      BucketName: !Sub 'auto-rescue-artifacts-${AWS::AccountId}'
+
+  # ========================================
+  # S3 Bucket for Pipeline Artifacts
+  # ========================================
+  ArtifactBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: BucketCleanupTrigger
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub 'auto-rescue-artifacts-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Artifacts'
+
+  # ========================================
+  # IAM Role for CodePipeline
+  # ========================================
+  CodePipelineRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CodePipelineRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodePipelinePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:GetBucketLocation'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub '${ArtifactBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource: !GetAtt CodeBuildProject.Arn
+              - Effect: Allow
+                Action:
+                  - 'codedeploy:CreateDeployment'
+                  - 'codedeploy:GetApplication'
+                  - 'codedeploy:GetApplicationRevision'
+                  - 'codedeploy:GetDeployment'
+                  - 'codedeploy:GetDeploymentConfig'
+                  - 'codedeploy:RegisterApplicationRevision'
+                Resource: '*'
+
+  # ========================================
+  # IAM Role for CodeBuild
+  # ========================================
+  CodeBuildRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CodeBuildRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+      Policies:
+        - PolicyName: CodeBuildPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                Resource:
+                  - !GetAtt ArtifactBucket.Arn
+                  - !Sub '${ArtifactBucket.Arn}/*'
+
+  # ========================================
+  # CodeBuild Project
+  # ========================================
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub '${AWS::StackName}-Build'
+      Description: Build and test Auto Rescue Advisor
+      ServiceRole: !GetAtt CodeBuildRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/standard:7.0
+        EnvironmentVariables:
+          - Name: ARTIFACT_BUCKET
+            Value: !Ref ArtifactBucket
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+      TimeoutInMinutes: 15
+      Cache:
+        Type: S3
+        Location: !Sub '${ArtifactBucket}/build-cache'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Build'
+
+  # ========================================
+  # IAM Role for CodeDeploy
+  # ========================================
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-CodeDeployRole'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodeDeployPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ec2:DescribeInstances'
+                  - 'ec2:DescribeInstanceStatus'
+                  - 'ec2:CreateTags'
+                  - 'ec2:DescribeTags'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'autoscaling:CompleteLifecycleAction'
+                  - 'autoscaling:DeleteLifecycleHook'
+                  - 'autoscaling:DescribeAutoScalingGroups'
+                  - 'autoscaling:DescribeLifecycleHooks'
+                  - 'autoscaling:PutLifecycleHook'
+                  - 'autoscaling:RecordLifecycleActionHeartbeat'
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - 'tag:GetResources'
+                Resource: '*'
+
+  # ========================================
+  # CodeDeploy Application
+  # ========================================
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub '${AWS::StackName}-App'
+      ComputePlatform: Server
+
+  # ========================================
+  # CodeDeploy Deployment Group
+  # ========================================
+  CodeDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub '${AWS::StackName}-DeploymentGroup'
+      ServiceRoleArn: !GetAtt CodeDeployRole.Arn
+      Ec2TagFilters:
+        - Type: KEY_AND_VALUE
+          Key: CodeDeployTarget
+          Value: AutoRescue
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+
+  # ========================================
+  # CodePipeline
+  # ========================================
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub '${AWS::StackName}-Pipeline'
+      RoleArn: !GetAtt CodePipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactBucket
+      Stages:
+        # Source Stage - GitHub
+        - Name: Source
+          Actions:
+            - Name: SourceAction
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Provider: GitHub
+                Version: '1'
+              Configuration:
+                Owner: !Ref GitHubOwner
+                Repo: !Ref GitHubRepo
+                Branch: !Ref GitHubBranch
+                OAuthToken: !Ref GitHubToken
+                PollForSourceChanges: false
+              OutputArtifacts:
+                - Name: SourceOutput
+        
+        # Build Stage - CodeBuild
+        - Name: Build
+          Actions:
+            - Name: BuildAction
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              InputArtifacts:
+                - Name: SourceOutput
+              OutputArtifacts:
+                - Name: BuildOutput
+        
+        # Deploy Stage - CodeDeploy
+        - Name: Deploy
+          Actions:
+            - Name: DeployToEC2
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeploy
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Ref CodeDeploymentGroup
+              InputArtifacts:
+                - Name: BuildOutput
+
+Outputs:
+  PipelineName:
+    Description: CodePipeline name
+    Value: !Ref Pipeline
+    
+  PipelineURL:
+    Description: CodePipeline console URL
+    Value: !Sub 'https://console.aws.amazon.com/codesuite/codepipeline/pipelines/${Pipeline}/view?region=${AWS::Region}'
+  
+  CodeBuildProject:
+    Description: CodeBuild project name
+    Value: !Ref CodeBuildProject
+  
+  CodeDeployApplication:
+    Description: CodeDeploy application name
+    Value: !Ref CodeDeployApplication
+  
+  ArtifactBucket:
+    Description: S3 bucket for artifacts
+    Value: !Ref ArtifactBucket
+  
+  NextSteps:
+    Description: What to do next
+    Value: 'Tag your EC2 instance with Key=CodeDeployTarget, Value=AutoRescue and install CodeDeploy agent'

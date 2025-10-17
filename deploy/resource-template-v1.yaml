@@ -1,0 +1,392 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EC2 with ALB for Lounge Access Advisor - Public Subnet Version'
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: Existing VPC ID
+    Default: vpc-07a0afe01f05fb0fc
+  
+  GitHubOwner:
+    Type: String
+    Description: GitHub repository owner
+    Default: sasigururaj
+  
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+    Default: -LoungeAccessAdvisor
+  
+  GitHubBranch:
+    Type: String
+    Description: GitHub branch
+    Default: main
+  
+  EC2KeyName:
+    Type: String
+    Description: EC2 Key Pair name (optional)
+    Default: ''
+  
+  AllowAccessFrom:
+    Type: String
+    Description: IP address to allow HTTP access from (use 0.0.0.0/0 for anywhere)
+    Default: 0.0.0.0/0
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref EC2KeyName, '']]
+
+Resources:
+  # ========================================
+  # Internet Gateway
+  # ========================================
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VpcId
+      InternetGatewayId: !Ref InternetGateway
+
+  # ========================================
+  # Public Subnets (Need 2 for ALB)
+  # ========================================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: 10.109.183.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet1-AZ1'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VpcId
+      CidrBlock: 10.109.184.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet2-AZ2'
+
+  # ========================================
+  # Route Table
+  # ========================================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VpcId
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicRouteTable'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ========================================
+  # Security Group for ALB
+  # ========================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Application Load Balancer
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: !Ref AllowAccessFrom
+          Description: HTTP access from internet
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB-SecurityGroup'
+
+  # ========================================
+  # Security Group for EC2
+  # ========================================
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Streamlit application
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/8
+          Description: SSH access from within VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2-SecurityGroup'
+
+  # ========================================
+  # Ingress Rule: ALB -> EC2
+  # ========================================
+  EC2IngressFromALB:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EC2SecurityGroup
+      IpProtocol: tcp
+      FromPort: 8501
+      ToPort: 8501
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Description: Streamlit access from ALB only
+
+  # ========================================
+  # Application Load Balancer
+  # ========================================
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: AttachGateway
+    Properties:
+      Name: !Sub '${AWS::StackName}-ALB'
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB'
+
+  # ========================================
+  # Target Group
+  # ========================================
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub '${AWS::StackName}-TG'
+      Port: 8501
+      Protocol: HTTP
+      VpcId: !Ref VpcId
+      TargetType: instance
+      Targets:
+        - Id: !Ref EC2Instance
+          Port: 8501
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /
+      HealthCheckPort: 8501
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: 200,301,302
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-TargetGroup'
+
+  # ========================================
+  # ALB Listener
+  # ========================================
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ========================================
+  # IAM Role for EC2
+  # ========================================
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EC2Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: BedrockRuntimeAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: BedrockRuntimeAllInvoke
+                Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource:
+                  - arn:aws:bedrock:*:905418267822:inference-profile/*
+                  - arn:aws:bedrock:us-east-1:905418267822:inference-profile/*
+                  - arn:aws:bedrock:*::foundation-model/*
+        - PolicyName: S3ArtifactsAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                Resource: arn:aws:s3:::lounge-advisor-artifacts-905418267822/*          
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2Role'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2Role
+
+  # ========================================
+  # EC2 Instance (Public Subnet)
+  # ========================================
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    DependsOn: AttachGateway
+    Properties:
+      ImageId: !Sub '{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}'
+      InstanceType: t2.2xlarge
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      SubnetId: !Ref PublicSubnet1
+      KeyName: !If [HasKeyName, !Ref EC2KeyName, !Ref 'AWS::NoValue']
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          
+          echo "Starting deployment at $(date)" > /var/log/user-data.log
+          
+          # Update system
+          yum update -y
+          
+          # Install dependencies
+          yum install -y python3.12 python3.12-pip git
+          
+          # Install UV as ec2-user (not root!)
+          su - ec2-user -c 'curl -LsSf https://astral.sh/uv/install.sh | sh'
+          
+          # Create app directory
+          mkdir -p /home/ec2-user/app
+          cd /home/ec2-user/app
+          
+          # Clone repository (CORRECT URL!)
+          git clone https://github.com/AnuR-lab/-LoungeAccessAdvisor.git .
+          git checkout ${GitHubBranch}
+          
+          # Set permissions
+          chown -R ec2-user:ec2-user /home/ec2-user/app
+          
+          # Install dependencies as ec2-user
+          su - ec2-user -c 'cd /home/ec2-user/app && /home/ec2-user/.local/bin/uv sync'
+          
+          # Create systemd service with CORRECT PATH
+          cat > /etc/systemd/system/streamlit.service <<'EOF'
+          [Unit]
+          Description=Streamlit Lounge Access Advisor
+          After=network.target
+          
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user/app
+          Environment="PATH=/home/ec2-user/.local/bin:/usr/local/bin:/usr/bin:/bin"
+          ExecStart=/home/ec2-user/.local/bin/uv run streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+          Restart=always
+          RestartSec=10
+          
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+          
+          # Start service
+          systemctl daemon-reload
+          systemctl enable streamlit
+          systemctl start streamlit
+          
+          echo "Deployment completed at $(date)" >> /var/log/user-data.log
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Instance'
+        - Key: CodeDeployTarget
+          Value: LoungeAdvisor
+
+Outputs:
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB-DNS'
+  
+  ApplicationURL:
+    Description: Application URL (via ALB)
+    Value: !Sub 'http://${ApplicationLoadBalancer.DNSName}'
+  
+  InstanceId:
+    Description: EC2 Instance ID
+    Value: !Ref EC2Instance
+  
+  PublicIP:
+    Description: EC2 Public IP address (for SSH)
+    Value: !GetAtt EC2Instance.PublicIp
+  
+  DirectStreamlitURL:
+    Description: Direct Streamlit URL (blocked by security group)
+    Value: !Sub 'http://${EC2Instance.PublicIp}:8501'
+  
+  SSHCommand:
+    Description: SSH command (if key pair provided)
+    Value: !Sub 'ssh -i ${EC2KeyName}.pem ec2-user@${EC2Instance.PublicIp}'
+  
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+  
+  EC2SecurityGroupId:
+    Description: EC2 Security Group ID
+    Value: !Ref EC2SecurityGroup
+  
+  TargetGroupArn:
+    Description: Target Group ARN
+    Value: !Ref TargetGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetGroup-ARN'

@@ -1,0 +1,40 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+    commands:
+      - echo "Installing UV package manager..."
+      - curl -LsSf https://astral.sh/uv/install.sh | sh
+      - export PATH="$HOME/.local/bin:$PATH"
+      - uv --version
+      
+  pre_build:
+    commands:
+      - echo "Pre-build phase started on $(date)"
+      - echo "Syncing dependencies with UV..."
+      - uv sync
+      - echo "Dependencies synced successfully"
+      
+  build:
+    commands:
+      - echo "Build phase started on $(date)"
+      - echo "Running Python syntax checks..."
+      - python -m py_compile src/*.py app.py
+      - echo "Syntax checks passed"
+      
+  post_build:
+    commands:
+      - echo "Post-build phase started on $(date)"
+      - echo "Build completed successfully on $(date)"
+
+artifacts:
+  files:
+    - '**/*'
+  name: LoungeAccessAdvisor-$(date +%Y%m%d-%H%M%S)
+
+cache:
+  paths:
+    - '.venv/**/*'
+    - '$HOME/.local/**/*'
