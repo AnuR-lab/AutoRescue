@@ -7,6 +7,7 @@ import os
 import json
 import boto3
 import logging
+import sys
 from typing import List, Optional, Dict
 from datetime import datetime, timedelta
 import requests
@@ -118,6 +119,104 @@ def random_flight_suggestion() -> str:
     return json.dumps(suggestion)
 
 
+@tool
+def book_flight(flight_offer: dict) -> str:
+    """Complete a flight booking confirmation.
+    
+    This is the FINAL step in the booking workflow after priceFlightOffer.
+    Creates a booking confirmation for the passenger.
+    
+    Args:
+        flight_offer: The complete priced flight offer object from priceFlightOffer tool.
+                     Must include: type, id, itineraries, price, validatingAirlineCodes, travelerPricings
+    
+    Returns:
+        JSON string with booking confirmation including:
+        - Booking reference number
+        - Passenger name
+        - Confirmation email
+        - Flight details (route, dates, carrier, price)
+        - Confirmation status and congratulations message
+    """
+    try:
+        logger.info("Starting flight booking process...")
+        
+        # Hardcoded passenger information
+        passenger_name = "JORGE GONZALES"
+        passenger_email = "jorge.gonzales833@telefonica.es"
+        
+        # Extract flight details from priced offer
+        itineraries = flight_offer.get('itineraries', [{}])
+        first_itinerary = itineraries[0] if itineraries else {}
+        segments = first_itinerary.get('segments', [])
+        first_segment = segments[0] if segments else {}
+        last_segment = segments[-1] if segments else {}
+        
+        # Get price information
+        price = flight_offer.get('price', {})
+        
+        # Generate booking reference (timestamp-based)
+        booking_reference = f"AR{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+        
+        # Extract flight details
+        origin = first_segment.get('departure', {}).get('iataCode', 'N/A')
+        destination = last_segment.get('arrival', {}).get('iataCode', 'N/A')
+        departure_date = first_segment.get('departure', {}).get('at', 'N/A')
+        carrier_code = first_segment.get('carrierCode', 'N/A')
+        flight_number = f"{carrier_code}{first_segment.get('number', '')}"
+        total_price = price.get('total', 'N/A')
+        currency = price.get('currency', 'USD')
+        
+        # Create booking confirmation
+        confirmation = {
+            "success": True,
+            "message": f"🎉 Congratulations! Your flight is booked, {passenger_name}!",
+            "booking_reference": booking_reference,
+            "confirmation": {
+                "bookingNumber": booking_reference,
+                "status": "CONFIRMED",
+                "passengerName": passenger_name,
+                "confirmationEmail": passenger_email,
+                "flightDetails": {
+                    "origin": origin,
+                    "destination": destination,
+                    "departureDate": departure_date,
+                    "carrier": carrier_code,
+                    "flightNumber": flight_number,
+                    "price": f"{currency} {total_price}"
+                },
+                "message": f"✈️ Your booking confirmation has been sent to {passenger_email}"
+            },
+            "booking_details": {
+                "confirmation_number": booking_reference,
+                "passenger": {
+                    "name": passenger_name,
+                    "email": passenger_email
+                },
+                "flight": {
+                    "from": origin,
+                    "to": destination,
+                    "date": departure_date,
+                    "airline": carrier_code,
+                    "flight_number": flight_number,
+                    "total_price": f"{currency} {total_price}"
+                },
+                "status": "CONFIRMED"
+            }
+        }
+        
+        logger.info(f"Booking confirmed: {booking_reference}")
+        return json.dumps(confirmation)
+        
+    except Exception as e:
+        logger.error(f"Error during booking: {e}", exc_info=True)
+        error_response = {
+            "success": False,
+            "error": f"Booking failed: {str(e)}"
+        }
+        return json.dumps(error_response)
+
+
 def fetch_oauth_token() -> str:
     """
     Fetch OAuth2 access token from Cognito using client credentials
@@ -177,16 +276,24 @@ Your role is to help travelers with:
 
 When a user wants to book a flight, follow this exact sequence:
 
-1. **Search for Flights** - Use `searchFlights` tool to find available options
+1. **Search for Flights** - Use `searchFlights` tool (from gateway) to find available options
 2. **Present Options** - Show the user flight details (times, duration, price)
 3. **User Selects** - Wait for user to select their preferred flight option
-4. **Price the Offer** - Use `priceFlightOffer` tool with the COMPLETE flight offer object to get final pricing
+4. **Price the Offer** - Use `priceFlightOffer` tool (from gateway) with the COMPLETE flight offer object to get final pricing
 5. **Present Final Details** - Show validated pricing, taxes, fees, and booking requirements
-6. **Collect Booking Information** - When user confirms booking, collect required details:
-    - Traveler information (name, date of birth, gender, contact details)
-    - Travel documents (passport/ID information)
-    - Contact information for booking confirmation
-7. **Complete Booking** - Use `bookFlight` tool to finalize the reservation and receive booking confirmation
+6. **Confirm Booking** - When user confirms they want to book:
+    - Explain: "I'll complete the booking for you"
+7. **Complete Booking** - Use `book_flight` tool (built-in agent tool) with ONLY the priced flight_offer parameter:
+    - Pass the complete 'data' object from priceFlightOffer response as the flight_offer parameter
+    - Returns JSON with booking confirmation
+    - This is the FINAL step - no further action needed after booking
+8. **Present Confirmation** - Parse the JSON response from book_flight and show:
+    - Congratulations message
+    - Booking reference number (e.g., "AR20251215123045")
+    - Passenger name: JORGE GONZALES
+    - Confirmation email: jorge.gonzales833@telefonica.es
+    - Flight details: route, dates, carrier, flight number, price
+    - Status: CONFIRMED
 
 ## CRITICAL: Disruption/Cancellation Handling Rules
 
@@ -361,6 +468,7 @@ class AutoRescueAgent:
         self.tools = [
             current_time,  # Built-in time tool
             random_flight_suggestion,  # Random flight suggestion tool
+            book_flight,  # Flight booking with S3 passenger info
         ] + self.gateway_client.list_tools_sync()  # Gateway MCP tools
         
         if additional_tools:

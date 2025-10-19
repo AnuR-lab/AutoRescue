@@ -9,7 +9,7 @@ import boto3
 
 DEFAULT_BUCKET = "autorescue-personal-info"
 DEFAULT_KEY = "personal_info.json"
-DEFAULT_PROFILE = "SBPOC11"
+DEFAULT_PROFILE = None  # Use IAM role-based authentication by default
 
 class PersonalInfoLoaderError(Exception):
     """Raised when the S3 object cannot be retrieved or parsed."""
@@ -19,9 +19,10 @@ def _get_s3_client(profile_name: str | None = None):
     if profile_name:
         session = boto3.Session(profile_name=profile_name)
         return session.client("s3")
+    # Use default credentials (IAM role in Lambda/ECS, or default profile locally)
     return boto3.client("s3")
 
-def load_personal_info(bucket: str = DEFAULT_BUCKET, key: str = DEFAULT_KEY, *, use_cache: bool = True, profile_name: str = DEFAULT_PROFILE) -> Dict[str, Any]:
+def load_personal_info(bucket: str = DEFAULT_BUCKET, key: str = DEFAULT_KEY, *, use_cache: bool = True, profile_name: str | None = DEFAULT_PROFILE) -> Dict[str, Any]:
     """Load personal info JSON from S3.
 
     Parameters
@@ -32,6 +33,9 @@ def load_personal_info(bucket: str = DEFAULT_BUCKET, key: str = DEFAULT_KEY, *, 
         Object key (defaults to personal_info.json).
     use_cache: bool
         If True, caches parsed JSON during process lifetime.
+    profile_name: str | None
+        AWS profile name. If None (default), uses IAM role-based authentication
+        (recommended for Lambda/ECS environments).
 
     Returns
     -------
@@ -63,7 +67,12 @@ if __name__ == "__main__":  # simple CLI
     parser.add_argument("--bucket", default=DEFAULT_BUCKET)
     parser.add_argument("--key", default=DEFAULT_KEY)
     parser.add_argument("--no-cache", action="store_true", help="Disable client cache")
-    parser.add_argument("--profile", help="AWS profile name (e.g. SBPOC11)")
+    parser.add_argument("--profile", default=None, help="AWS profile name (optional, uses IAM role if not provided)")
     args = parser.parse_args()
-    data = load_personal_info()
+    data = load_personal_info(
+        bucket=args.bucket,
+        key=args.key,
+        use_cache=not args.no_cache,
+        profile_name=args.profile
+    )
     print(json.dumps(data, indent=2))
