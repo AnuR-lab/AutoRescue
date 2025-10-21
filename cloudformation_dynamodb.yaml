@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create a DynamoDB table and seed initial data from S3 via a Lambda-backed custom resource.
+
+Parameters:
+  TableName:
+    Type: String
+    Default: request_2_table_test
+    Description: Name of the DynamoDB table to create.
+  PartitionKeyName:
+    Type: String
+    Default: key
+    Description: Partition (hash) key attribute name.
+  PartitionKeyType:
+    Type: String
+    AllowedValues: [S, N, B]
+    Default: S
+    Description: Partition (hash) key attribute type (S|N|B).
+  SeedDataBucket:
+    Type: String
+    Description: S3 bucket containing the seed JSON file.
+  SeedDataKey:
+    Type: String
+    Description: S3 object key (path/filename.json) for the seed JSON file.
+
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: !Ref PartitionKeyName
+          AttributeType: !Ref PartitionKeyType
+      KeySchema:
+        - AttributeName: !Ref PartitionKeyName
+          KeyType: HASH
+      SSESpecification:
+        SSEEnabled: true
+
+  SeederRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoSeedPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:PutItem
+                  - dynamodb:DescribeTable
+                Resource: !GetAtt Table.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub arn:aws:s3:::${SeedDataBucket}/${SeedDataKey}
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: "*"
+
+  SeederFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Seeds initial items into the DynamoDB table after creation (loads from S3).
+      Runtime: python3.12
+      Handler: index.handler
+      Timeout: 60
+      Role: !GetAtt SeederRole.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          PARTITION_KEY_NAME: !Ref PartitionKeyName
+          SEED_BUCKET: !Ref SeedDataBucket
+          SEED_KEY: !Ref SeedDataKey
+      Code:
+        ZipFile: |
+          import json, os, time, urllib.request
+          import boto3
+
+          TABLE_NAME = os.environ["TABLE_NAME"]
+          PARTITION_KEY_NAME = os.getenv("PARTITION_KEY_NAME", "key")
+          SEED_BUCKET = os.environ["SEED_BUCKET"]
+          SEED_KEY = os.environ["SEED_KEY"]
+
+          ddb = boto3.resource("dynamodb")
+          s3 = boto3.client("s3")
+          table = ddb.Table(TABLE_NAME)
+
+          def send_cfn(event, context, status, reason=None):
+              url = event["ResponseURL"]
+              body = {
+                  "Status": status,
+                  "Reason": reason or f"See CloudWatch Log Stream: {context.log_stream_name}",
+                  "PhysicalResourceId": event.get("PhysicalResourceId") or f"{TABLE_NAME}-seeder",
+                  "StackId": event["StackId"],
+                  "RequestId": event["RequestId"],
+                  "LogicalResourceId": event["LogicalResourceId"],
+                  "NoEcho": False,
+                  "Data": {"Status": status},
+              }
+              data = json.dumps(body).encode("utf-8")
+              req = urllib.request.Request(url, data=data, method="PUT")
+              req.add_header("content-type", "")
+              req.add_header("content-length", str(len(data)))
+              with urllib.request.urlopen(req) as resp:
+                  resp.read()
+
+          def wait_table_active():
+              c = boto3.client("dynamodb")
+              while True:
+                  if c.describe_table(TableName=TABLE_NAME)["Table"]["TableStatus"] == "ACTIVE":
+                      return
+                  time.sleep(2)
+
+          def handler(event, context):
+              try:
+                  if event["RequestType"] == "Delete":
+                      send_cfn(event, context, "SUCCESS", "No-op on Delete")
+                      return
+
+                  # Load seed JSON array from S3 (each element must be a full DynamoDB item)
+                  obj = s3.get_object(Bucket=SEED_BUCKET, Key=SEED_KEY)
+                  payload = obj["Body"].read().decode("utf-8")
+                  seeds = json.loads(payload)
+                  if not isinstance(seeds, list):
+                      raise ValueError("Seed file must be a JSON array of items")
+
+                  wait_table_active()
+                  # Idempotent: overwrite if same partition key already exists
+                  with table.batch_writer(overwrite_by_pkeys=[PARTITION_KEY_NAME]) as batch:
+                      for item in seeds:
+                          batch.put_item(Item=item)
+
+                  send_cfn(event, context, "SUCCESS", f"Seeded {len(seeds)} item(s).")
+              except Exception as e:
+                  send_cfn(event, context, "FAILED", f"Seeder error: {e}")
+
+  SeedInvoker:
+    Type: AWS::CloudFormation::CustomResource
+    DependsOn: Table
+    Properties:
+      ServiceToken: !GetAtt SeederFunction.Arn
+
+Outputs:
+  TableNameOut:
+    Description: Created table name
+    Value: !Ref TableName
+  TableArnOut:
+    Description: Created table ARN
+    Value: !GetAtt Table.Arn
